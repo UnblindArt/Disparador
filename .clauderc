@@ -1,0 +1,180 @@
+# Claude AI - Instruções para o Projeto WhatsApp Dispatcher
+
+## 🎯 REGRA PRINCIPAL
+
+**SEMPRE consulte `/opt/whatsapp-dispatcher-client/DOCUMENTATION.md` ANTES de fazer qualquer alteração no código!**
+
+Esta documentação contém:
+- Arquitetura do sistema
+- Padrões de código estabelecidos
+- Estrutura de dados da Evolution API v2
+- Soluções para problemas conhecidos
+- Guia de desenvolvimento
+
+## 📦 POLÍTICA DE VERSIONAMENTO
+
+**TODOS os projetos devem seguir versionamento semântico:**
+
+### Estágio Atual: V0 (Versão Inicial)
+
+### Regras de Versionamento:
+
+1. **Desenvolvimento Incremental**
+   - Cada solicitação de alteração/ajuste cria uma nova versão
+   - Versões seguem formato: V0, V1, V2, V3...
+   - Branches de desenvolvimento: `feature/v1`, `feature/v2`, etc.
+
+2. **Branches e Ambientes**
+   - `main` → Produção (versão aprovada atual)
+   - `develop` → Desenvolvimento ativo
+   - `feature/vX` → Desenvolvimento da versão X específica
+
+3. **Processo de Aprovação**
+   - ⚠️ **NUNCA atualize a URL de produção sem aprovação explícita**
+   - Após implementar mudanças, deploy em ambiente de staging
+   - URL staging: `https://dev-disparador.unblind.cloud`
+   - URL produção: `https://disparador.unblind.cloud` (apenas após aprovação)
+   - Aguarde aprovação do usuário antes de promover versão
+
+4. **Workflow de Deploy**
+   ```
+   Implementação → Deploy Staging → Testes → Aprovação ✓ → Deploy Produção
+   ```
+
+5. **Documentação de Versões**
+   - Mantenha CHANGELOG.md atualizado
+   - Documente breaking changes
+   - Liste novas features por versão
+   - Inclua data de release
+
+6. **Rollback**
+   - Sempre mantenha versão anterior disponível
+   - Tag git para cada versão: `v0`, `v1`, `v2`...
+   - Possibilidade de rollback rápido se necessário
+
+### Exemplo de Ciclo:
+
+```bash
+# V0 → V1 (nova feature de campanhas)
+git checkout -b feature/v1
+# ... implementações ...
+git tag v1
+git push origin feature/v1 --tags
+
+# Deploy staging para testes
+docker stack deploy -c staging.yaml
+
+# Após aprovação
+git checkout main
+git merge feature/v1
+# Deploy produção
+```
+
+## 📋 Checklist Antes de Modificar Código
+
+1. ✅ Ler a seção relevante da DOCUMENTATION.md
+2. ✅ Verificar padrões de código existentes
+3. ✅ Entender fluxo de dados completo
+4. ✅ Seguir convenções estabelecidas
+5. ✅ Atualizar documentação se necessário
+
+## 🔒 Regras Específicas
+
+### Evolution API v2
+
+**NUNCA use GET para endpoints de chat - sempre POST!**
+
+```javascript
+// ❌ ERRADO
+await axios.get('/chat/findChats/instance')
+
+// ✅ CORRETO
+await axios.post('/chat/findChats/instance', { where: {} })
+```
+
+**SEMPRE use evolutionService.js - nunca chame API diretamente!**
+
+**SEMPRE normalize dados com `normalizeContactName()`**
+
+**SEMPRE remova duplicatas usando Map**
+
+### Backend
+
+- Use `asyncHandler` em todos os controllers
+- Retorne objetos estruturados: `{ success, data, error }`
+- Log com `logger.info()` / `logger.error()`
+- Valide entrada do usuário
+- Trate erros adequadamente
+
+### Frontend
+
+- Use React Query para todas as chamadas API
+- TypeScript sempre (sem `any`)
+- Componentes funcionais com hooks
+- TailwindCSS para estilos
+- Invalidate queries após mutations
+
+### Database
+
+- Use Supabase client via `supabaseAdmin`
+- Sempre filtre por `user_id` para isolamento
+- Soft delete com `deleted_at`
+- Use JSONB para campos flexíveis (`metadata`, `custom_fields`)
+
+## 🐛 Problemas Conhecidos (RESOLVIDOS)
+
+### ✅ Nomes técnicos nas conversas
+**Solução**: `normalizeContactName()` em evolutionService.js
+
+### ✅ Conversas duplicadas
+**Solução**: Map com remoteJid como chave única
+
+### ✅ lastMessage não aparece
+**Solução**: Parseia tanto formato objeto quanto flattened
+
+### ✅ Chats desordenados
+**Solução**: Ordena por conversationTimestamp
+
+## 📝 Fluxo ao Adicionar Features
+
+1. **Planejamento**
+   - Ler documentação relevante
+   - Identificar arquivos afetados
+   - Planejar estrutura de dados
+
+2. **Backend**
+   - Service layer (lógica de negócio)
+   - Controller (validação + resposta)
+   - Route (definir endpoint)
+   - Testar com curl/Postman
+
+3. **Frontend**
+   - Atualizar tipos TypeScript
+   - Criar/atualizar API client
+   - Implementar UI com React Query
+   - Testar fluxo completo
+
+4. **Documentação**
+   - Atualizar DOCUMENTATION.md
+   - Adicionar exemplos
+   - Documentar novos endpoints
+
+5. **Deploy**
+   - `pm2 restart whatsapp-dispatcher-api --update-env`
+   - Verificar logs
+   - Testar em produção
+
+## 🎓 Recursos
+
+- Documentação principal: `/opt/whatsapp-dispatcher-client/DOCUMENTATION.md`
+- Contexto do VPS: `/root/.claude-context.md`
+- Evolution API v2: https://doc.evolution-api.com/v2
+
+## ⚠️ IMPORTANTE
+
+Se você identificar inconsistências entre o código e a documentação:
+1. Analise qual está correto
+2. Corrija o que estiver errado
+3. Atualize ambos para ficarem sincronizados
+
+A documentação deve sempre refletir o estado atual do código!
