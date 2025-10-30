@@ -24,7 +24,7 @@ const campaignWorker = new Worker(
       }
 
       // Check if campaign is still active
-      if (campaign.status !== 'active' && campaign.status !== 'scheduled') {
+      if (campaign.status !== 'active' && campaign.status !== 'scheduled' && campaign.status !== 'draft') {
         logger.info(`Campaign ${campaignId} is ${campaign.status}, skipping`);
         return { success: false, reason: 'Campaign not active' };
       }
@@ -55,16 +55,24 @@ const campaignWorker = new Worker(
         return { success: true, messagesSent: 0 };
       }
 
-      // Queue messages
+      // Queue messages with delays
       const messageJobs = messages.map((msg, index) => ({
         messageId: msg.id,
         userId,
+        instanceName: campaign.instance_name,
         to: msg.phone,
         message: msg.message,
         mediaUrl: msg.media_url,
+        mediaType: msg.media_type,
+        isCampaign: true,
+        delay: (msg.delay_seconds || 0) * 1000, // Convert to milliseconds
       }));
 
-      await queueHelpers.addBulkMessages(messageJobs);
+      // Add messages to queue with individual delays
+      for (const msgJob of messageJobs) {
+        const { delay, ...jobData } = msgJob;
+        await queueHelpers.addMessageJob(jobData, { delay });
+      }
 
       // Update campaign status
       await supabaseAdmin

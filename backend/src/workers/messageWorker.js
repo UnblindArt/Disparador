@@ -8,29 +8,37 @@ import config from '../config/env.js';
 const messageWorker = new Worker(
   'messages',
   async (job) => {
-    const { messageId, userId, to, message, mediaUrl } = job.data;
+    const { messageId, userId, to, message, mediaUrl, mediaType, instanceName, isCampaign } = job.data;
 
-    logger.info(`Processing message job ${job.id}`, { messageId, to });
+    logger.info(`Processing message job ${job.id}`, { messageId, to, instanceName });
 
     try {
       // Send message via Evolution API
       let result;
       if (mediaUrl) {
-        result = await evolutionService.sendMediaMessage(to, mediaUrl, message);
+        result = await evolutionService.sendMediaMessage(instanceName, to, mediaUrl, message, mediaType);
       } else {
-        result = await evolutionService.sendTextMessage(to, message);
+        result = await evolutionService.sendTextMessage(instanceName, to, message);
       }
 
-      // Update message status
+      // Update message status in appropriate table
+      const tableName = isCampaign ? 'campaign_messages' : 'messages';
+      const updateData = {
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (!isCampaign) {
+        updateData.external_id = result.key?.id || null;
+        updateData.metadata = result;
+      } else {
+        updateData.evolution_message_id = result.key?.id || null;
+      }
+
       await supabaseAdmin
-        .from('messages')
-        .update({
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-          external_id: result.key?.id || null,
-          metadata: result,
-          updated_at: new Date().toISOString(),
-        })
+        .from(tableName)
+        .update(updateData)
         .eq('id', messageId);
 
       // Update contact last message timestamp
@@ -55,11 +63,13 @@ const messageWorker = new Worker(
       logger.error(`Failed to send message ${messageId}:`, error);
 
       // Update message status to failed
+      const tableName = isCampaign ? 'campaign_messages' : 'messages';
       await supabaseAdmin
-        .from('messages')
+        .from(tableName)
         .update({
           status: 'failed',
           error_message: error.message,
+          failed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('id', messageId);

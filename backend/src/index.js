@@ -73,6 +73,12 @@ async function startServer() {
     }
     logger.info('Redis connected');
 
+    // Start scheduler service for campaign automation
+    logger.info('Starting scheduler service...');
+    const schedulerService = (await import('./services/schedulerService.js')).default;
+    schedulerService.start();
+    logger.info('Scheduler service started');
+
     // Start HTTP server
     const server = app.listen(config.PORT, () => {
       logger.info(`Server started on port ${config.PORT}`);
@@ -88,6 +94,11 @@ async function startServer() {
         logger.info('HTTP server closed');
 
         try {
+          // Stop scheduler
+          const schedulerService = (await import('./services/schedulerService.js')).default;
+          schedulerService.stop();
+          logger.info('Scheduler stopped');
+
           // Close queues
           const { closeQueues } = await import('./config/queue.js');
           await closeQueues();

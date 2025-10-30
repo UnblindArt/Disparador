@@ -8,6 +8,11 @@ import Contacts from './pages/Contacts'
 import Campaigns from './pages/Campaigns'
 import Messages from './pages/Messages'
 import Schedule from './pages/Schedule'
+import WhatsAppConnect from './pages/WhatsAppConnect'
+import Chat from './pages/Chat'
+import Appointments from './pages/Appointments'
+import Tags from './pages/Tags'
+import Products from './pages/Products'
 import Layout from './components/layout/Layout'
 
 const queryClient = new QueryClient()
@@ -26,9 +31,14 @@ function App() {
           <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="contacts" element={<Contacts />} />
+            <Route path="tags" element={<Tags />} />
+            <Route path="products" element={<Products />} />
             <Route path="campaigns" element={<Campaigns />} />
             <Route path="messages" element={<Messages />} />
             <Route path="schedule" element={<Schedule />} />
+            <Route path="appointments" element={<Appointments />} />
+            <Route path="whatsapp" element={<WhatsAppConnect />} />
+            <Route path="chat" element={<Chat />} />
           </Route>
         </Routes>
       </BrowserRouter>

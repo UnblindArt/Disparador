@@ -22,6 +22,7 @@ export interface Contact {
   name?: string
   email?: string
   tags: string[]
+  products: string[]
   custom_fields: Record<string, any>
   opt_in_status: 'pending' | 'opted_in' | 'opted_out'
   opt_in_at?: string
@@ -42,8 +43,13 @@ export interface Campaign {
   group_id?: string
   tags: string[]
   total_contacts: number
+  total_sent?: number
+  total_delivered?: number
+  total_read?: number
+  total_failed?: number
   status: 'draft' | 'scheduled' | 'active' | 'processing' | 'completed' | 'paused' | 'cancelled' | 'failed'
   scheduled_for?: string
+  scheduled_start?: string
   started_at?: string
   completed_at?: string
   created_at: string
@@ -57,6 +63,7 @@ export interface Message {
   phone: string
   message: string
   media_url?: string
+  media_type?: string
   status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
   direction: 'inbound' | 'outbound'
   scheduled_for?: string

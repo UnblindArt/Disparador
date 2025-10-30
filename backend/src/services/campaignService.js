@@ -1,10 +1,28 @@
 import { supabaseAdmin } from '../config/database.js';
 import { queueHelpers } from '../config/queue.js';
+import evolutionService from './evolutionService.js';
 import logger from '../config/logger.js';
 
 export async function createCampaign(userId, campaignData) {
   try {
-    const { name, templateId, message, targetType, groupId, tags, contactIds, scheduledFor, variables } = campaignData;
+    const {
+      name,
+      instanceName,
+      templateId,
+      message,
+      mediaUrl,
+      mediaType,
+      targetType,
+      groupId,
+      tags,
+      productIds,
+      contactIds,
+      uploadedContacts,
+      scheduledFor,
+      variables,
+      delayMin = 3,
+      delayMax = 10
+    } = campaignData;
 
     // Get target contacts
     let targetContacts = [];
@@ -34,6 +52,16 @@ export async function createCampaign(userId, campaignData) {
         .contains('tags', tags)
         .is('deleted_at', null);
       targetContacts = data || [];
+    } else if (targetType === 'product' && productIds && productIds.length > 0) {
+      // Get contacts with specific products
+      const { data } = await supabaseAdmin
+        .from('contacts')
+        .select('id, phone, name')
+        .eq('user_id', userId)
+        .eq('opt_in_status', 'opted_in')
+        .contains('products', productIds)
+        .is('deleted_at', null);
+      targetContacts = data || [];
     } else if (targetType === 'individual' && contactIds && contactIds.length > 0) {
       const { data } = await supabaseAdmin
         .from('contacts')
@@ -43,11 +71,66 @@ export async function createCampaign(userId, campaignData) {
         .eq('opt_in_status', 'opted_in')
         .is('deleted_at', null);
       targetContacts = data || [];
+    } else if (targetType === 'upload' && uploadedContacts && uploadedContacts.length > 0) {
+      // Use contacts from uploaded file
+      // Create contacts if they don't exist
+      for (const uploadContact of uploadedContacts) {
+        const { phone, name, tags: uploadTags } = uploadContact;
+
+        // Check if contact exists
+        const { data: existing } = await supabaseAdmin
+          .from('contacts')
+          .select('id, phone, name, opt_in_status')
+          .eq('user_id', userId)
+          .eq('phone', phone)
+          .is('deleted_at', null)
+          .single();
+
+        if (existing) {
+          // Update tags if provided
+          if (uploadTags && uploadTags.length > 0) {
+            await supabaseAdmin
+              .from('contacts')
+              .update({
+                tags: [...new Set([...(existing.tags || []), ...uploadTags])]
+              })
+              .eq('id', existing.id);
+          }
+
+          if (existing.opt_in_status === 'opted_in') {
+            targetContacts.push(existing);
+          }
+        } else {
+          // Create new contact
+          const { data: newContact } = await supabaseAdmin
+            .from('contacts')
+            .insert([
+              {
+                user_id: userId,
+                phone,
+                name: name || phone,
+                tags: uploadTags || [],
+                opt_in_status: 'opted_in' // Auto opt-in for uploaded contacts
+              }
+            ])
+            .select('id, phone, name')
+            .single();
+
+          if (newContact) {
+            targetContacts.push(newContact);
+          }
+        }
+      }
     }
 
     if (targetContacts.length === 0) {
       throw new Error('No valid contacts found for this campaign');
     }
+
+    // Remove duplicates
+    const uniqueContacts = Array.from(
+      new Map(targetContacts.map(c => [c.phone, c])).values()
+    );
 
     // Get template content if templateId provided
     let finalMessage = message;
@@ -64,6 +147,22 @@ export async function createCampaign(userId, campaignData) {
       }
     }
 
+    // Get user's default instance if not provided
+    let finalInstanceName = instanceName;
+    if (!finalInstanceName) {
+      const { data: userSettings } = await supabaseAdmin
+        .from('user_settings')
+        .select('default_instance')
+        .eq('user_id', userId)
+        .single();
+
+      if (!userSettings?.default_instance) {
+        throw new Error('No WhatsApp instance configured. Please connect an instance first.');
+      }
+
+      finalInstanceName = userSettings.default_instance;
+    }
+
     // Create campaign
     const { data: campaign, error } = await supabaseAdmin
       .from('campaigns')
@@ -71,15 +170,21 @@ export async function createCampaign(userId, campaignData) {
         {
           user_id: userId,
           name,
+          instance_name: finalInstanceName,
           template_id: templateId || null,
-          message: finalMessage,
+          message_content: finalMessage,
+          media_url: mediaUrl || null,
+          media_type: mediaType || null,
           target_type: targetType,
-          group_id: groupId || null,
+          target_group_id: groupId || null,
           tags: tags || [],
-          total_contacts: targetContacts.length,
-          status: scheduledFor ? 'scheduled' : 'active',
-          scheduled_for: scheduledFor || null,
+          product_ids: productIds || [],
+          total_contacts: uniqueContacts.length,
+          status: scheduledFor ? 'scheduled' : 'draft',
+          scheduled_at: scheduledFor || null,
           variables: variables || {},
+          delay_min: delayMin,
+          delay_max: delayMax,
         },
       ])
       .select()
@@ -89,16 +194,27 @@ export async function createCampaign(userId, campaignData) {
       throw error;
     }
 
-    // Create campaign messages
-    const messages = targetContacts.map(contact => ({
-      campaign_id: campaign.id,
-      user_id: userId,
-      contact_id: contact.id,
-      phone: contact.phone,
-      message: finalMessage,
-      status: 'pending',
-      scheduled_for: scheduledFor || null,
-    }));
+    // Create campaign messages with randomized delays
+    const messages = uniqueContacts.map((contact, index) => {
+      // Calculate cumulative delay for sequential sending
+      let delaySeconds = 0;
+      for (let i = 0; i <= index; i++) {
+        delaySeconds += Math.floor(Math.random() * (delayMax - delayMin + 1)) + delayMin;
+      }
+
+      return {
+        campaign_id: campaign.id,
+        user_id: userId,
+        contact_id: contact.id,
+        phone: contact.phone,
+        message: finalMessage,
+        media_url: mediaUrl || null,
+        media_type: mediaType || null,
+        status: 'pending',
+        scheduled_for: scheduledFor || null,
+        delay_seconds: delaySeconds
+      };
+    });
 
     await supabaseAdmin
       .from('campaign_messages')
@@ -109,10 +225,13 @@ export async function createCampaign(userId, campaignData) {
       await queueHelpers.addCampaignJob({
         campaignId: campaign.id,
         userId,
+        instanceName: finalInstanceName,
+        delayMin,
+        delayMax
       });
     }
 
-    logger.info('Campaign created:', { userId, campaignId: campaign.id, totalContacts: targetContacts.length });
+    logger.info('Campaign created:', { userId, campaignId: campaign.id, totalContacts: uniqueContacts.length });
 
     return campaign;
   } catch (error) {

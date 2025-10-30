@@ -14,7 +14,23 @@ const consoleFormat = printf(({ level, message, timestamp, ...metadata }) => {
   let msg = `${timestamp} [${level}]: ${message}`;
 
   if (Object.keys(metadata).length > 0) {
-    msg += ` ${JSON.stringify(metadata)}`;
+    try {
+      // Use a safe stringify that handles circular references
+      msg += ` ${JSON.stringify(metadata, (key, value) => {
+        // Handle circular references
+        if (typeof value === 'object' && value !== null) {
+          // Skip functions and non-serializable objects
+          if (typeof value.constructor !== 'undefined' &&
+              value.constructor.name !== 'Object' &&
+              value.constructor.name !== 'Array') {
+            return `[${value.constructor.name}]`;
+          }
+        }
+        return value;
+      })}`;
+    } catch (error) {
+      msg += ` [metadata serialization error]`;
+    }
   }
 
   return msg;

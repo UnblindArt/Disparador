@@ -1,26 +1,62 @@
 import { supabaseAdmin } from '../config/database.js';
 import { queueHelpers } from '../config/queue.js';
+import evolutionService from './evolutionService.js';
+import { getMediaType } from './mediaConverterService.js';
 import logger from '../config/logger.js';
 
 export async function sendMessage(userId, messageData) {
   try {
-    const { to, message, mediaUrl, scheduledFor } = messageData;
+    const { instanceName, to, message, mediaUrl, mediaType, scheduledFor } = messageData;
 
-    // Verify contact exists and is opted in
+    // Get user's default instance if not provided
+    let finalInstanceName = instanceName;
+    if (!finalInstanceName) {
+      const { data: userSettings } = await supabaseAdmin
+        .from('user_settings')
+        .select('default_instance')
+        .eq('user_id', userId)
+        .single();
+
+      if (!userSettings?.default_instance) {
+        throw new Error('No WhatsApp instance configured. Please connect an instance first.');
+      }
+
+      finalInstanceName = userSettings.default_instance;
+    }
+
+    // Verify contact exists (optional - can send to any number)
+    let contactId = null;
     const { data: contact } = await supabaseAdmin
       .from('contacts')
-      .select('id, opt_in_status')
+      .select('id, opt_in_status, name')
       .eq('user_id', userId)
       .eq('phone', to)
       .is('deleted_at', null)
       .single();
 
-    if (!contact) {
-      throw new Error('Contact not found');
-    }
+    if (contact) {
+      contactId = contact.id;
 
-    if (contact.opt_in_status !== 'opted_in') {
-      throw new Error('Contact has not opted in to receive messages');
+      // Check opt-in status if contact exists
+      if (contact.opt_in_status === 'opted_out') {
+        throw new Error(`Contact ${contact.name || to} has opted out of receiving messages`);
+      }
+    } else {
+      // Create contact if doesn't exist
+      const { data: newContact } = await supabaseAdmin
+        .from('contacts')
+        .insert([
+          {
+            user_id: userId,
+            phone: to,
+            name: to,
+            opt_in_status: 'pending'
+          }
+        ])
+        .select('id')
+        .single();
+
+      contactId = newContact?.id;
     }
 
     // Create message record
@@ -29,10 +65,11 @@ export async function sendMessage(userId, messageData) {
       .insert([
         {
           user_id: userId,
-          contact_id: contact.id,
+          contact_id: contactId,
           phone: to,
-          message,
+          message: message || '',
           media_url: mediaUrl || null,
+          media_type: mediaType || (mediaUrl ? getMediaType(mediaType) : null),
           status: 'pending',
           scheduled_for: scheduledFor || null,
           direction: 'outbound',
@@ -45,18 +82,70 @@ export async function sendMessage(userId, messageData) {
       throw error;
     }
 
-    // Queue message if not scheduled
+    // Send immediately if not scheduled
     if (!scheduledFor) {
+      try {
+        let sendResult;
+
+        if (mediaUrl) {
+          // Send media message
+          const caption = message || '';
+          const finalMediaType = mediaType || getMediaType(mediaUrl);
+
+          sendResult = await evolutionService.sendMediaMessage(
+            finalInstanceName,
+            to,
+            mediaUrl,
+            caption,
+            finalMediaType
+          );
+        } else {
+          // Send text message
+          sendResult = await evolutionService.sendTextMessage(
+            finalInstanceName,
+            to,
+            message
+          );
+        }
+
+        // Update message status to sent
+        await supabaseAdmin
+          .from('messages')
+          .update({ status: 'sent', sent_at: new Date().toISOString() })
+          .eq('id', msg.id);
+
+        logger.info('Message sent successfully:', { userId, messageId: msg.id, to });
+
+        return { ...msg, status: 'sent', sendResult };
+      } catch (sendError) {
+        // Update message status to failed
+        await supabaseAdmin
+          .from('messages')
+          .update({
+            status: 'failed',
+            error_message: sendError.message || 'Failed to send message'
+          })
+          .eq('id', msg.id);
+
+        logger.error('Failed to send message:', sendError);
+        throw sendError;
+      }
+    } else {
+      // Queue message for later
       await queueHelpers.addMessageJob({
         messageId: msg.id,
         userId,
+        instanceName: finalInstanceName,
         to,
         message,
         mediaUrl,
+        mediaType,
+        scheduledFor
       });
+
+      logger.info('Message scheduled:', { userId, messageId: msg.id, scheduledFor });
     }
 
-    logger.info('Message queued:', { userId, messageId: msg.id });
     return msg;
   } catch (error) {
     logger.error('Send message error:', error);

@@ -1,22 +1,54 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Upload, Plus, Search, Trash2 } from 'lucide-react'
+import { Upload, Plus, Search, Trash2, RefreshCw, Smartphone, Tag, Package } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
-import { contactsAPI } from '../services/api'
+import TagSelector from '../components/TagSelector'
+import ProductSelector from '../components/ProductSelector'
+import { contactsAPI, whatsappAPI } from '../services/api'
 import { Contact } from '../types'
 import { formatPhone } from '../lib/utils'
 
 export default function Contacts() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [showSyncModal, setShowSyncModal] = useState(false)
+  const [selectedInstance, setSelectedInstance] = useState('')
   const [newContact, setNewContact] = useState({ name: '', phone: '', email: '' })
+  const [selectedContactForTags, setSelectedContactForTags] = useState<Contact | null>(null)
+  const [selectedContactForProducts, setSelectedContactForProducts] = useState<Contact | null>(null)
   const queryClient = useQueryClient()
+
+  // Get all instances for sync
+  const { data: instancesData } = useQuery({
+    queryKey: ['whatsapp-instances'],
+    queryFn: async () => {
+      const res = await whatsappAPI.getAllInstances()
+      return res.data.data
+    },
+    enabled: showSyncModal,
+  })
+
+  // Sync WhatsApp contacts mutation
+  const syncMutation = useMutation({
+    mutationFn: (instanceName: string) => contactsAPI.syncWhatsApp(instanceName),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] })
+      const stats = response.data.stats
+      toast.success(
+        `Sincronização concluída! ${stats.created} criados, ${stats.updated} atualizados, ${stats.skipped} ignorados`
+      )
+      setShowSyncModal(false)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Erro ao sincronizar contatos')
+    },
+  })
 
   const { data: contacts } = useQuery({
     queryKey: ['contacts'],
@@ -115,12 +147,76 @@ export default function Contacts() {
           <p className="text-clinic-gray-300">Gerencie sua lista de pacientes</p>
         </div>
         <div className="flex gap-3">
+          <Button
+            onClick={() => setShowSyncModal(true)}
+            variant="outline"
+            className="bg-green-500 hover:bg-green-600 text-white border-green-500"
+          >
+            <Smartphone size={18} className="mr-2" />
+            Sincronizar WhatsApp
+          </Button>
           <Button onClick={() => setShowForm(!showForm)}>
             <Plus size={18} className="mr-2" />
             Novo Paciente
           </Button>
         </div>
       </div>
+
+      {/* Sync Modal */}
+      {showSyncModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-4">Sincronizar Contatos do WhatsApp</h2>
+            <p className="text-gray-600 mb-4">
+              Selecione a instância do WhatsApp para sincronizar os contatos
+            </p>
+
+            <select
+              value={selectedInstance}
+              onChange={(e) => setSelectedInstance(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent mb-4"
+            >
+              <option value="">Selecione uma instância</option>
+              {instancesData?.map((instance: any) => (
+                <option
+                  key={instance.id || instance.instance_name}
+                  value={instance.instance_name || instance.instance?.instanceName}
+                >
+                  {instance.instance_name || instance.instance?.instanceName}
+                </option>
+              ))}
+            </select>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowSyncModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                disabled={syncMutation.isPending}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (selectedInstance) {
+                    syncMutation.mutate(selectedInstance)
+                  }
+                }}
+                disabled={!selectedInstance || syncMutation.isPending}
+                className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {syncMutation.isPending ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Sincronizando...
+                  </>
+                ) : (
+                  'Sincronizar'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Card className="border-none bg-white/10 backdrop-blur-md">
         <CardHeader>
@@ -229,7 +325,26 @@ export default function Contacts() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    onClick={() => setSelectedContactForTags(contact)}
+                    title="Gerenciar Tags"
+                    className="hover:bg-clinic-royal/20"
+                  >
+                    <Tag size={16} className="text-clinic-royal" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedContactForProducts(contact)}
+                    title="Gerenciar Produtos"
+                    className="hover:bg-green-500/20"
+                  >
+                    <Package size={16} className="text-green-400" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => deleteMutation.mutate(contact.id)}
+                    title="Deletar"
                   >
                     <Trash2 size={16} className="text-red-400" />
                   </Button>
@@ -244,6 +359,26 @@ export default function Contacts() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Tag Selector Modal */}
+      {selectedContactForTags && (
+        <TagSelector
+          contactId={selectedContactForTags.id}
+          contactName={selectedContactForTags.name || 'Sem nome'}
+          currentTagIds={selectedContactForTags.tags || []}
+          onClose={() => setSelectedContactForTags(null)}
+        />
+      )}
+
+      {/* Product Selector Modal */}
+      {selectedContactForProducts && (
+        <ProductSelector
+          contactId={selectedContactForProducts.id}
+          contactName={selectedContactForProducts.name || 'Sem nome'}
+          currentProductIds={selectedContactForProducts.products || []}
+          onClose={() => setSelectedContactForProducts(null)}
+        />
+      )}
     </div>
   )
 }

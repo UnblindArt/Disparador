@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Users, Send, Calendar, MessageSquare, LogOut } from 'lucide-react'
+import { LayoutDashboard, Users, Send, Calendar, MessageSquare, LogOut, Smartphone, Tag, Package } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
 export default function Layout() {
@@ -9,9 +9,12 @@ export default function Layout() {
 
   const navigation = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/whatsapp', icon: Smartphone, label: 'WhatsApp' },
+    { to: '/chat', icon: MessageSquare, label: 'Chat' },
     { to: '/contacts', icon: Users, label: 'Pacientes' },
+    { to: '/tags', icon: Tag, label: 'Tags' },
+    { to: '/products', icon: Package, label: 'Produtos' },
     { to: '/campaigns', icon: Send, label: 'Campanhas' },
-    { to: '/messages', icon: MessageSquare, label: 'Mensagens' },
     { to: '/schedule', icon: Calendar, label: 'Agenda' },
   ]
 
