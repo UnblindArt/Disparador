@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   X, Phone, FileText,
-  Link as LinkIcon, Plus, Clock
+  Link as LinkIcon, Plus, Clock, Check
 } from 'lucide-react'
 import { contactsAPI, appointmentsAPI } from '../services/api'
 import ContactTagsProducts from './ContactTagsProducts'
@@ -86,6 +86,19 @@ export default function ContactProfile({ contactPhone, contactName, onClose }: C
       contactId: contact.id
     })
   }
+
+  // Confirm appointment mutation
+  const confirmAppointmentMutation = useMutation({
+    mutationFn: (id: string) => appointmentsAPI.update(id, { status: 'confirmed' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contact-appointments'] })
+      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      toast.success('Agendamento confirmado!')
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || 'Erro ao confirmar agendamento')
+    }
+  })
 
   const formatDate = (dateString: string) => {
     return new Intl.DateTimeFormat('pt-BR', {
@@ -227,16 +240,36 @@ export default function ContactProfile({ contactPhone, contactName, onClose }: C
             <div className="space-y-2">
               {appointmentsData?.map((apt: any) => (
                 <div key={apt.id} className="p-3 bg-gray-50 rounded-lg">
-                  <h4 className="font-medium text-sm">{apt.title}</h4>
-                  <div className="flex items-center gap-2 text-xs text-gray-600 mt-1">
-                    <Clock className="w-3 h-3" />
-                    {formatDate(apt.start_time)}
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-sm">{apt.title}</h4>
+                      <div className="flex items-center gap-2 text-xs text-gray-600 mt-1">
+                        <Clock className="w-3 h-3" />
+                        {formatDate(apt.start_time)}
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded mt-2 inline-block ${
+                        apt.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                        apt.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                        apt.status === 'completed' ? 'bg-gray-100 text-gray-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {apt.status === 'confirmed' ? 'Confirmado' :
+                         apt.status === 'scheduled' ? 'Agendado' :
+                         apt.status === 'completed' ? 'Concluído' :
+                         apt.status}
+                      </span>
+                    </div>
+                    {apt.status === 'scheduled' && (
+                      <button
+                        onClick={() => confirmAppointmentMutation.mutate(apt.id)}
+                        disabled={confirmAppointmentMutation.isPending}
+                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
+                        title="Confirmar agendamento"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded mt-2 inline-block ${
-                    apt.status === 'scheduled' ? 'bg-blue-100' : 'bg-gray-100'
-                  }`}>
-                    {apt.status}
-                  </span>
                 </div>
               )) || <p className="text-sm text-gray-500 text-center py-4">Nenhum agendamento</p>}
             </div>

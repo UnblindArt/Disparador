@@ -96,6 +96,15 @@ export default function Appointments() {
     }
   })
 
+  // Confirm appointment
+  const confirmMutation = useMutation({
+    mutationFn: (id: string) => appointmentsAPI.update(id, { status: 'confirmed' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      toast.success('Agendamento confirmado!')
+    }
+  })
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     createMutation.mutate(formData)
@@ -255,6 +264,31 @@ export default function Appointments() {
                         {/* Actions */}
                         <div className="flex gap-2">
                           {apt.status === 'scheduled' && (
+                            <>
+                              <button
+                                onClick={() => confirmMutation.mutate(apt.id)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Confirmar"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => completeMutation.mutate(apt.id)}
+                                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                title="Concluir"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => cancelMutation.mutate(apt.id)}
+                                className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                title="Cancelar"
+                              >
+                                <Ban className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                          {apt.status === 'confirmed' && (
                             <>
                               <button
                                 onClick={() => completeMutation.mutate(apt.id)}
