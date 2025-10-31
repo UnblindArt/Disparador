@@ -12,6 +12,7 @@ import tagRoutes from './tags.js';
 import appointmentRoutes from './appointments.js';
 import dashboardRoutes from './dashboard.js';
 import notificationRoutes from './notifications.js';
+import forecastRoutes from './forecast.js';
 import { apiLimiter } from '../middlewares/rateLimiter.js';
 
 const router = express.Router();
@@ -44,5 +45,6 @@ router.use('/tags', tagRoutes);
 router.use('/appointments', appointmentRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/forecast', forecastRoutes);
 
 export default router;
