@@ -17,9 +17,43 @@
 
 ## 📦 Versões Disponíveis
 
-### v1.1.1 (Atual em Produção)
+### v1.2.1 (Atual em Produção) 🎯
+**Data:** 2025-10-31 14:00
+**Status:** ✅ Estável e em Produção
+**Commit:** `df5c00b`
+
+**Novidades - Campaign Safety Enhancements:**
+- ✅ **UI melhorada** para delay anti-bloqueio com indicadores visuais
+- ✅ **Alertas de segurança** em tempo real (danger/warning/good/excellent)
+- ✅ **Calculadora automática** de duração da campanha
+- ✅ **Botões rápidos** para configurações recomendadas (3-5s, 5-15s, 10-30s)
+- ✅ **Dicas de personalização** com variáveis {{name}}, {{phone}}, {{email}}
+- ✅ **Documentação completa** de campanhas (CAMPAIGNS_GUIDE.md)
+- ✅ **Guia de deploy** rápido (README_DEPLOY.md)
+
+**Lógica de Segurança:**
+- >100 contatos + <10s delay = 🔴 PERIGO
+- >50 contatos + <5s delay = 🔴 PERIGO
+- >50 contatos + <10s delay = 🟡 AVISO
+- 5-15s delay = 🟢 SEGURO (recomendado)
+- >15s delay = 🟢 EXTRA SEGURO
+
+**Backend v1.2 (não deployado ainda):**
+- ⚙️ API de previsão financeira
+- ⚙️ Pipeline de vendas
+- ⚙️ Cálculo de probabilidade de fechamento
+- ⚠️ Requer migração 011 antes do deploy
+
+**Deploy:**
+```bash
+./deploy.sh v1.2.1
+```
+
+---
+
+### v1.1.1
 **Data:** 2025-10-31 12:45
-**Status:** ✅ Estável
+**Status:** ✅ Estável (substituída por v1.2.1)
 **Commit:** `6dc6efe`
 
 **Novidades:**
