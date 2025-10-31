@@ -41,6 +41,43 @@ export default function Campaigns() {
 
   const queryClient = useQueryClient()
 
+  // Calculate estimated campaign duration
+  const calculateDuration = (contacts: number, minDelay: number, maxDelay: number) => {
+    if (contacts === 0) return null
+    const avgDelay = (minDelay + maxDelay) / 2
+    const totalSeconds = contacts * avgDelay
+    const minutes = Math.floor(totalSeconds / 60)
+    const hours = Math.floor(minutes / 60)
+
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}min`
+    } else if (minutes > 0) {
+      return `${minutes} minutos`
+    } else {
+      return `${Math.ceil(totalSeconds)} segundos`
+    }
+  }
+
+  // Check if delay configuration is safe
+  const isDelaySafe = () => {
+    const avgDelay = (newCampaign.minDelay + newCampaign.maxDelay) / 2
+
+    if (estimatedContacts > 100 && avgDelay < 10) {
+      return { safe: false, level: 'danger', message: 'Campanha grande com delay muito curto. Alto risco de bloqueio!' }
+    } else if (estimatedContacts > 50 && avgDelay < 5) {
+      return { safe: false, level: 'danger', message: 'Delay muito curto para esta quantidade de contatos!' }
+    } else if (estimatedContacts > 50 && avgDelay < 10) {
+      return { safe: false, level: 'warning', message: 'Recomendamos aumentar o delay para pelo menos 10-15 segundos.' }
+    } else if (avgDelay < 5) {
+      return { safe: false, level: 'warning', message: 'Delay abaixo do recomendado. Considere aumentar para 5-15 segundos.' }
+    } else if (avgDelay >= 5 && avgDelay <= 15) {
+      return { safe: true, level: 'good', message: 'Configuração segura para produção!' }
+    } else if (avgDelay > 15) {
+      return { safe: true, level: 'excellent', message: 'Configuração extra segura - ideal para campanhas grandes!' }
+    }
+    return { safe: true, level: 'good', message: 'Configuração OK' }
+  }
+
   // Fetch data for selectors
   const { data: contacts } = useQuery({
     queryKey: ['contacts'],
@@ -371,39 +408,111 @@ export default function Campaigns() {
                 </div>
               </div>
 
-              {/* Delay Configuration */}
-              <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-                <label className="block text-sm font-medium text-white mb-2 flex items-center gap-2">
-                  <Clock size={16} />
-                  Delay Entre Envios (Anti-Spam)
-                </label>
-                <div className="grid grid-cols-2 gap-3">
+              {/* Delay Configuration - Enhanced */}
+              <div className="p-4 rounded-lg bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-2 border-blue-500/30">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-2 rounded-lg bg-blue-500/20">
+                    <Clock size={18} className="text-blue-300" />
+                  </div>
                   <div>
-                    <label className="block text-xs text-clinic-gray-400 mb-1">Mínimo (segundos)</label>
+                    <h4 className="text-sm font-semibold text-white">Proteção Anti-Bloqueio</h4>
+                    <p className="text-xs text-blue-200">Intervalo aleatório entre mensagens</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs font-medium text-white mb-1">Mínimo (segundos)</label>
                     <input
                       type="number"
                       min="1"
-                      max="30"
+                      max="300"
                       value={newCampaign.minDelay}
                       onChange={(e) => setNewCampaign({ ...newCampaign, minDelay: parseInt(e.target.value) || 3 })}
-                      className="w-full px-3 py-2 bg-white/20 text-white border border-clinic-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-clinic-royal"
+                      className="w-full px-3 py-2 bg-white/20 text-white border border-blue-400/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-clinic-gray-400 mb-1">Máximo (segundos)</label>
+                    <label className="block text-xs font-medium text-white mb-1">Máximo (segundos)</label>
                     <input
                       type="number"
                       min="1"
-                      max="60"
+                      max="300"
                       value={newCampaign.maxDelay}
                       onChange={(e) => setNewCampaign({ ...newCampaign, maxDelay: parseInt(e.target.value) || 10 })}
-                      className="w-full px-3 py-2 bg-white/20 text-white border border-clinic-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-clinic-royal"
+                      className="w-full px-3 py-2 bg-white/20 text-white border border-blue-400/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                     />
                   </div>
                 </div>
-                <p className="text-xs text-clinic-gray-400 mt-2">
-                  ⚡ Delay aleatório entre {newCampaign.minDelay}s e {newCampaign.maxDelay}s para evitar detecção de spam
-                </p>
+
+                {/* Safety Status Indicator */}
+                {(() => {
+                  const safetyCheck = isDelaySafe()
+                  const avgDelay = ((newCampaign.minDelay + newCampaign.maxDelay) / 2).toFixed(1)
+
+                  return (
+                    <div className={`p-3 rounded-lg border mb-3 ${
+                      safetyCheck.level === 'danger' ? 'bg-red-500/20 border-red-500/50' :
+                      safetyCheck.level === 'warning' ? 'bg-yellow-500/20 border-yellow-500/50' :
+                      safetyCheck.level === 'excellent' ? 'bg-green-500/20 border-green-500/50' :
+                      'bg-blue-500/20 border-blue-500/50'
+                    }`}>
+                      <div className="flex items-start gap-2">
+                        {safetyCheck.level === 'danger' || safetyCheck.level === 'warning' ? (
+                          <AlertCircle size={16} className={`mt-0.5 flex-shrink-0 ${
+                            safetyCheck.level === 'danger' ? 'text-red-300' : 'text-yellow-300'
+                          }`} />
+                        ) : (
+                          <CheckCircle size={16} className="text-green-300 mt-0.5 flex-shrink-0" />
+                        )}
+                        <div className="flex-1">
+                          <p className={`text-xs font-medium ${
+                            safetyCheck.level === 'danger' ? 'text-red-200' :
+                            safetyCheck.level === 'warning' ? 'text-yellow-200' :
+                            safetyCheck.level === 'excellent' ? 'text-green-200' :
+                            'text-blue-200'
+                          }`}>
+                            {safetyCheck.message}
+                          </p>
+                          <p className="text-xs text-white/70 mt-1">
+                            Delay médio: <strong>{avgDelay}s</strong>
+                            {estimatedContacts > 0 && calculateDuration(estimatedContacts, newCampaign.minDelay, newCampaign.maxDelay) && (
+                              <> • Tempo estimado: <strong>{calculateDuration(estimatedContacts, newCampaign.minDelay, newCampaign.maxDelay)}</strong></>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Recommended Settings */}
+                <div className="bg-white/5 rounded-lg p-2 border border-white/10">
+                  <p className="text-xs text-blue-200 font-medium mb-1">💡 Configurações Recomendadas:</p>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setNewCampaign({ ...newCampaign, minDelay: 3, maxDelay: 5 })}
+                      className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white transition-colors"
+                    >
+                      Teste: 3-5s
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewCampaign({ ...newCampaign, minDelay: 5, maxDelay: 15 })}
+                      className="px-2 py-1 rounded bg-blue-500/30 hover:bg-blue-500/40 text-white transition-colors font-medium"
+                    >
+                      ✓ Seguro: 5-15s
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewCampaign({ ...newCampaign, minDelay: 10, maxDelay: 30 })}
+                      className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white transition-colors"
+                    >
+                      Extra: 10-30s
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Single Message Mode */}
@@ -414,10 +523,18 @@ export default function Campaigns() {
                     <textarea
                       value={newCampaign.message}
                       onChange={(e) => setNewCampaign({ ...newCampaign, message: e.target.value })}
-                      placeholder="Digite sua mensagem aqui..."
+                      placeholder="Digite sua mensagem aqui... Use {{name}} para personalizar!"
                       rows={4}
                       className="w-full rounded-lg border border-clinic-gray-300 bg-white/20 text-white px-3 py-2 placeholder:text-clinic-gray-400 focus:outline-none focus:ring-2 focus:ring-clinic-royal"
                     />
+                    <div className="mt-2 p-2 rounded-lg bg-purple-500/10 border border-purple-500/30">
+                      <p className="text-xs text-purple-200">
+                        <strong>💡 Personalize suas mensagens:</strong> Use <code className="px-1 py-0.5 bg-white/20 rounded">{'{{name}}'}</code>, <code className="px-1 py-0.5 bg-white/20 rounded">{'{{phone}}'}</code>, ou <code className="px-1 py-0.5 bg-white/20 rounded">{'{{email}}'}</code> para tornar cada mensagem única e evitar detecção de spam.
+                      </p>
+                      <p className="text-xs text-purple-200 mt-1">
+                        <strong>Exemplo:</strong> "Olá {'{{name}}'}, temos uma oferta especial para você!"
+                      </p>
+                    </div>
                   </div>
 
                   {/* Media Section */}
