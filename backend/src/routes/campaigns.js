@@ -18,4 +18,10 @@ router.post('/:id/resume', campaignController.resumeCampaign);
 router.post('/:id/cancel', campaignController.cancelCampaign);
 router.delete('/:id', campaignController.deleteCampaign);
 
+// Cadence routes
+router.post('/:campaignId/cadences', campaignController.createCampaignCadence);
+router.get('/:campaignId/cadences', campaignController.getCampaignCadences);
+router.put('/:campaignId/cadences/:cadenceId', campaignController.updateCampaignCadence);
+router.delete('/:campaignId/cadences/:cadenceId', campaignController.deleteCampaignCadence);
+
 export default router;

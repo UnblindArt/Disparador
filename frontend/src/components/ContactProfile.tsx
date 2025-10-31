@@ -71,6 +71,10 @@ export default function ContactProfile({ contactPhone, contactName, onClose }: C
         notes: ''
       })
       toast.success('Agendamento criado!')
+    },
+    onError: (error: any) => {
+      console.error('Erro ao criar agendamento:', error)
+      toast.error(error?.response?.data?.message || 'Erro ao criar agendamento')
     }
   })
 
@@ -148,55 +152,73 @@ export default function ContactProfile({ contactPhone, contactName, onClose }: C
 
             {showAppointmentForm && (
               <form onSubmit={handleCreateAppointment} className="space-y-3 p-4 bg-gray-50 rounded-lg">
-                <input
-                  required
-                  placeholder="Título"
-                  value={appointmentData.title}
-                  onChange={(e) => setAppointmentData({ ...appointmentData, title: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
-                />
-                <select
-                  value={appointmentData.appointmentType}
-                  onChange={(e) => setAppointmentData({ ...appointmentData, appointmentType: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
-                >
-                  <option value="meeting">Reunião</option>
-                  <option value="consultation">Consulta</option>
-                  <option value="call">Ligação</option>
-                </select>
-                <input
-                  required
-                  type="datetime-local"
-                  value={appointmentData.startTime}
-                  onChange={(e) => setAppointmentData({ ...appointmentData, startTime: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
-                />
-                <input
-                  required
-                  type="datetime-local"
-                  value={appointmentData.endTime}
-                  onChange={(e) => setAppointmentData({ ...appointmentData, endTime: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
-                />
-                <input
-                  placeholder="Local"
-                  value={appointmentData.location}
-                  onChange={(e) => setAppointmentData({ ...appointmentData, location: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
-                />
-                <textarea
-                  placeholder="Observações"
-                  value={appointmentData.notes}
-                  onChange={(e) => setAppointmentData({ ...appointmentData, notes: e.target.value })}
-                  rows={2}
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
-                />
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => setShowAppointmentForm(false)} className="flex-1 px-3 py-2 border rounded-lg text-sm">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Título *</label>
+                  <input
+                    required
+                    placeholder="Ex: Consulta de rotina"
+                    value={appointmentData.title}
+                    onChange={(e) => setAppointmentData({ ...appointmentData, title: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Tipo</label>
+                  <select
+                    value={appointmentData.appointmentType}
+                    onChange={(e) => setAppointmentData({ ...appointmentData, appointmentType: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="meeting">Reunião</option>
+                    <option value="consultation">Consulta</option>
+                    <option value="call">Ligação</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Data e Hora de Início *</label>
+                  <input
+                    required
+                    type="datetime-local"
+                    value={appointmentData.startTime}
+                    onChange={(e) => setAppointmentData({ ...appointmentData, startTime: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Data e Hora de Término *</label>
+                  <input
+                    required
+                    type="datetime-local"
+                    value={appointmentData.endTime}
+                    onChange={(e) => setAppointmentData({ ...appointmentData, endTime: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Local (opcional)</label>
+                  <input
+                    placeholder="Ex: Consultório 2"
+                    value={appointmentData.location}
+                    onChange={(e) => setAppointmentData({ ...appointmentData, location: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Observações (opcional)</label>
+                  <textarea
+                    placeholder="Anotações sobre o agendamento..."
+                    value={appointmentData.notes}
+                    onChange={(e) => setAppointmentData({ ...appointmentData, notes: e.target.value })}
+                    rows={2}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button type="button" onClick={() => setShowAppointmentForm(false)} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors">
                     Cancelar
                   </button>
-                  <button type="submit" className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-sm">
-                    Criar
+                  <button type="submit" className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors">
+                    Criar Agendamento
                   </button>
                 </div>
               </form>

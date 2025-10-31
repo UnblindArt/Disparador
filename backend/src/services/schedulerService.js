@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../config/database.js';
 import evolutionService from './evolutionService.js';
+import reminderService from './reminderService.js';
 import logger from '../config/logger.js';
 import cron from 'node-cron';
 
@@ -442,15 +443,21 @@ class SchedulerService {
 
     logger.info('[Scheduler] Starting scheduler service');
 
-    // Executar a cada minuto
+    // Executar a cada minuto - Jobs de campanhas
     const cronJob = cron.schedule('* * * * *', async () => {
       await this.processScheduledJobs();
     });
-
     this.jobs.set('main', cronJob);
+
+    // Executar a cada minuto - Lembretes de agendamentos
+    const remindersJob = cron.schedule('* * * * *', async () => {
+      await reminderService.processPendingReminders();
+    });
+    this.jobs.set('reminders', remindersJob);
+
     this.isRunning = true;
 
-    logger.info('[Scheduler] Scheduler service started successfully');
+    logger.info('[Scheduler] Scheduler service started successfully (campaigns + reminders)');
   }
 
   /**

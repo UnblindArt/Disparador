@@ -1,18 +1,29 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Play, Pause, X, Users, Tag, Package, RefreshCw, Calendar, Image, Eye, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { Plus, Play, Pause, X, Users, Tag, Package, RefreshCw, Calendar, Image, Eye, CheckCircle, Clock, AlertCircle, Layers } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
-import { campaignsAPI, contactsAPI, tagsAPI } from '../services/api'
+import { campaignsAPI, contactsAPI, tagsAPI, type CadenceMedia } from '../services/api'
 import { Campaign } from '../types'
 import { formatDateTime } from '../lib/utils'
+import CadenceWizard from '../components/CadenceWizard'
 
 type TargetType = 'all' | 'tag' | 'individual'
+type CampaignMode = 'single' | 'cadence'
+
+interface CadenceDay {
+  day_number: number
+  message: string
+  send_time: string
+  media: CadenceMedia[]
+}
 
 export default function Campaigns() {
   const [showForm, setShowForm] = useState(false)
+  const [campaignMode, setCampaignMode] = useState<CampaignMode>('single')
+  const [cadences, setCadences] = useState<CadenceDay[]>([])
   const [newCampaign, setNewCampaign] = useState({
     name: '',
     message: '',
@@ -23,6 +34,8 @@ export default function Campaigns() {
     sendImmediately: true,
     mediaUrl: '',
     mediaType: '',
+    minDelay: 3,
+    maxDelay: 10,
   })
   const [estimatedContacts, setEstimatedContacts] = useState(0)
 
@@ -103,6 +116,8 @@ export default function Campaigns() {
         sendImmediately: true,
         mediaUrl: '',
         mediaType: '',
+        minDelay: 3,
+        maxDelay: 10,
       })
     },
     onError: (error: any) => {
@@ -134,10 +149,35 @@ export default function Campaigns() {
     },
   })
 
-  const handleSubmit = () => {
-    if (!newCampaign.name || !newCampaign.message) {
-      toast.error('Preencha nome e mensagem')
+  const handleSubmit = async () => {
+    if (!newCampaign.name) {
+      toast.error('Preencha o nome da campanha')
       return
+    }
+
+    // Validação para modo single
+    if (campaignMode === 'single' && !newCampaign.message) {
+      toast.error('Preencha a mensagem')
+      return
+    }
+
+    // Validação para modo cadence
+    if (campaignMode === 'cadence') {
+      if (cadences.length === 0) {
+        toast.error('Adicione pelo menos um dia à cadência')
+        return
+      }
+
+      for (const cadence of cadences) {
+        if (!cadence.message) {
+          toast.error(`Preencha a mensagem do Dia ${cadence.day_number}`)
+          return
+        }
+        if (!cadence.send_time) {
+          toast.error(`Configure o horário de envio do Dia ${cadence.day_number}`)
+          return
+        }
+      }
     }
 
     if (newCampaign.targetType === 'tag' && newCampaign.tags.length === 0) {
@@ -152,23 +192,75 @@ export default function Campaigns() {
 
     const submitData: any = {
       name: newCampaign.name,
-      message: newCampaign.message,
       target_type: newCampaign.targetType,
       tags: newCampaign.targetType === 'tag' ? newCampaign.tags :
             newCampaign.targetType === 'individual' ? newCampaign.contacts : [],
       send_immediately: newCampaign.sendImmediately,
+      delayMin: newCampaign.minDelay,
+      delayMax: newCampaign.maxDelay,
+    }
+
+    // Single message mode
+    if (campaignMode === 'single') {
+      submitData.message = newCampaign.message
+      submitData.has_cadence = false
+
+      if (newCampaign.mediaUrl && newCampaign.mediaType) {
+        submitData.media_url = newCampaign.mediaUrl
+        submitData.media_type = newCampaign.mediaType
+      }
+    }
+
+    // Cadence mode
+    if (campaignMode === 'cadence') {
+      submitData.has_cadence = true
+      submitData.message = `Cadência com ${cadences.length} dia(s)` // Placeholder
     }
 
     if (!newCampaign.sendImmediately && newCampaign.scheduleFor) {
       submitData.scheduled_for = newCampaign.scheduleFor
     }
 
-    if (newCampaign.mediaUrl && newCampaign.mediaType) {
-      submitData.media_url = newCampaign.mediaUrl
-      submitData.media_type = newCampaign.mediaType
-    }
+    try {
+      // Create campaign
+      const result = await createMutation.mutateAsync(submitData)
 
-    createMutation.mutate(submitData)
+      // If cadence mode, create cadences
+      if (campaignMode === 'cadence' && result?.data) {
+        const campaignId = (result.data as any).id
+
+        for (const cadence of cadences) {
+          await campaignsAPI.createCadence(campaignId, {
+            day_number: cadence.day_number,
+            message: cadence.message,
+            send_time: cadence.send_time,
+            media: cadence.media.filter(m => m.media_url && m.media_type)
+          })
+        }
+      }
+
+      // Reset form
+      setShowForm(false)
+      setNewCampaign({
+        name: '',
+        message: '',
+        targetType: 'all',
+        tags: [],
+        contacts: [],
+        scheduleFor: '',
+        sendImmediately: true,
+        mediaUrl: '',
+        mediaType: '',
+        minDelay: 3,
+        maxDelay: 10,
+      })
+      setCadences([])
+      setCampaignMode('single')
+
+      toast.success('Campanha criada com sucesso!')
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Erro ao criar campanha')
+    }
   }
 
   const toggleTag = (tagId: string) => {
@@ -246,18 +338,89 @@ export default function Campaigns() {
                 className="bg-white/20 text-white placeholder:text-clinic-gray-400"
               />
 
-              <div>
-                <label className="block text-sm font-medium text-white mb-1">Mensagem</label>
-                <textarea
-                  value={newCampaign.message}
-                  onChange={(e) => setNewCampaign({ ...newCampaign, message: e.target.value })}
-                  placeholder="Digite sua mensagem aqui..."
-                  rows={4}
-                  className="w-full rounded-lg border border-clinic-gray-300 bg-white/20 text-white px-3 py-2 placeholder:text-clinic-gray-400 focus:outline-none focus:ring-2 focus:ring-clinic-royal"
-                />
+              {/* Campaign Mode Selector */}
+              <div className="p-4 rounded-lg bg-white/5 border border-white/10">
+                <label className="block text-sm font-medium text-white mb-2">Modo de Campanha</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCampaignMode('single')}
+                    className={`p-3 rounded-lg border-2 transition-all ${
+                      campaignMode === 'single'
+                        ? 'border-blue-500 bg-blue-500/20 text-white'
+                        : 'border-white/20 bg-white/5 text-clinic-gray-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <Image className="mx-auto mb-1" size={20} />
+                    <span className="text-xs block">Mensagem Única</span>
+                    <span className="text-xs text-clinic-gray-400 block mt-1">Envia uma vez para todos</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCampaignMode('cadence')}
+                    className={`p-3 rounded-lg border-2 transition-all ${
+                      campaignMode === 'cadence'
+                        ? 'border-blue-500 bg-blue-500/20 text-white'
+                        : 'border-white/20 bg-white/5 text-clinic-gray-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <Layers className="mx-auto mb-1" size={20} />
+                    <span className="text-xs block">Cadência</span>
+                    <span className="text-xs text-clinic-gray-400 block mt-1">Sequência de mensagens</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Media Section */}
+              {/* Delay Configuration */}
+              <div className="p-4 rounded-lg bg-white/5 border border-white/10">
+                <label className="block text-sm font-medium text-white mb-2 flex items-center gap-2">
+                  <Clock size={16} />
+                  Delay Entre Envios (Anti-Spam)
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-clinic-gray-400 mb-1">Mínimo (segundos)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="30"
+                      value={newCampaign.minDelay}
+                      onChange={(e) => setNewCampaign({ ...newCampaign, minDelay: parseInt(e.target.value) || 3 })}
+                      className="w-full px-3 py-2 bg-white/20 text-white border border-clinic-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-clinic-royal"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-clinic-gray-400 mb-1">Máximo (segundos)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="60"
+                      value={newCampaign.maxDelay}
+                      onChange={(e) => setNewCampaign({ ...newCampaign, maxDelay: parseInt(e.target.value) || 10 })}
+                      className="w-full px-3 py-2 bg-white/20 text-white border border-clinic-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-clinic-royal"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-clinic-gray-400 mt-2">
+                  ⚡ Delay aleatório entre {newCampaign.minDelay}s e {newCampaign.maxDelay}s para evitar detecção de spam
+                </p>
+              </div>
+
+              {/* Single Message Mode */}
+              {campaignMode === 'single' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-white mb-1">Mensagem</label>
+                    <textarea
+                      value={newCampaign.message}
+                      onChange={(e) => setNewCampaign({ ...newCampaign, message: e.target.value })}
+                      placeholder="Digite sua mensagem aqui..."
+                      rows={4}
+                      className="w-full rounded-lg border border-clinic-gray-300 bg-white/20 text-white px-3 py-2 placeholder:text-clinic-gray-400 focus:outline-none focus:ring-2 focus:ring-clinic-royal"
+                    />
+                  </div>
+
+                  {/* Media Section */}
               <div className="p-4 rounded-lg bg-white/5 border border-white/10">
                 <label className="block text-sm font-medium text-white mb-2 flex items-center gap-2">
                   <Image size={16} />
@@ -299,6 +462,16 @@ export default function Campaigns() {
                   )}
                 </div>
               </div>
+                </>
+              )}
+
+              {/* Cadence Mode */}
+              {campaignMode === 'cadence' && (
+                <CadenceWizard
+                  cadences={cadences}
+                  onChange={setCadences}
+                />
+              )}
 
               {/* Scheduling Section */}
               <div className="p-4 rounded-lg bg-white/5 border border-white/10">

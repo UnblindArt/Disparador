@@ -72,7 +72,24 @@ export async function getContacts(userId, filters = {}) {
       throw error;
     }
 
-    return contacts;
+    // Get tags for all contacts
+    if (contacts.length === 0) {
+      return contacts;
+    }
+
+    const contactIds = contacts.map(c => c.id);
+    const { data: contactTags } = await supabaseAdmin
+      .from('contact_tags')
+      .select('contact_id, tags(*)')
+      .in('contact_id', contactIds);
+
+    // Add tags to each contact
+    const contactsWithTags = contacts.map(contact => ({
+      ...contact,
+      tagDetails: contactTags?.filter(ct => ct.contact_id === contact.id).map(ct => ct.tags) || []
+    }));
+
+    return contactsWithTags;
   } catch (error) {
     logger.error('Get contacts error:', error);
     throw error;
@@ -93,7 +110,23 @@ export async function getContactById(userId, contactId) {
       throw new Error('Contact not found');
     }
 
-    return contact;
+    // Get associated tags
+    const { data: contactTags } = await supabaseAdmin
+      .from('contact_tags')
+      .select('tag_id, tags(*)')
+      .eq('contact_id', contactId);
+
+    // Get associated products
+    const { data: contactProducts } = await supabaseAdmin
+      .from('contact_products')
+      .select('product_id, notes, products(*)')
+      .eq('contact_id', contactId);
+
+    return {
+      ...contact,
+      tags: contactTags || [],
+      products: contactProducts || []
+    };
   } catch (error) {
     logger.error('Get contact error:', error);
     throw error;

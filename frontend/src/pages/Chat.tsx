@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Send, RefreshCw, MessageSquare, Phone, ArrowLeft, Mic, Paperclip, Info, Bell, BellOff } from 'lucide-react'
@@ -7,6 +7,13 @@ import AudioRecorder from '../components/AudioRecorder'
 import MediaUploader from '../components/MediaUploader'
 import EmojiPicker from '../components/EmojiPicker'
 import ContactProfile from '../components/ContactProfile'
+
+// Helper to extract media from message (supports both direct fields and metadata)
+function getMediaFromMessage(msg: ChatMessage) {
+  const mediaUrl = msg.mediaUrl || msg.metadata?.media_url
+  const mediaType = msg.mediaType || msg.metadata?.media_type
+  return { mediaUrl, mediaType }
+}
 
 export default function Chat() {
   const queryClient = useQueryClient()
@@ -79,6 +86,20 @@ export default function Chat() {
     refetchInterval: autoRefresh ? 5000 : false, // Auto-refresh every 5s
   })
 
+  // Remove duplicate messages - sometimes refetch causes duplicates
+  const uniqueMessages = useMemo(() => {
+    if (!messagesData?.messages) return []
+
+    const seen = new Set()
+    return messagesData.messages.filter((msg: ChatMessage) => {
+      if (seen.has(msg.id)) {
+        return false
+      }
+      seen.add(msg.id)
+      return true
+    })
+  }, [messagesData])
+
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async (message: string) => {
@@ -101,7 +122,7 @@ export default function Chat() {
   // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messagesData])
+  }, [uniqueMessages])
 
   // Select first instance by default
   useEffect(() => {
@@ -484,14 +505,17 @@ export default function Chat() {
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
                     <p>Carregando mensagens...</p>
                   </div>
-                ) : messagesData && messagesData.messages.length === 0 ? (
+                ) : uniqueMessages.length === 0 ? (
                   <div className="text-center text-gray-500 py-12">
                     <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p>Nenhuma mensagem ainda</p>
                     <p className="text-sm mt-1">Envie a primeira mensagem!</p>
                   </div>
                 ) : (
-                  messagesData?.messages.map((msg: ChatMessage) => (
+                  uniqueMessages.map((msg: ChatMessage) => {
+                    const { mediaUrl, mediaType } = getMediaFromMessage(msg)
+
+                    return (
                     <div
                       key={msg.id}
                       className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
@@ -504,38 +528,38 @@ export default function Chat() {
                         }`}
                       >
                         {/* Media Content */}
-                        {msg.mediaUrl && (
+                        {mediaUrl && (
                           <div className="mb-2">
                             {/* Image */}
-                            {msg.mediaType === 'image' && (
+                            {mediaType === 'image' && (
                               <img
-                                src={msg.mediaUrl}
+                                src={mediaUrl}
                                 alt="Imagem"
                                 className="w-full max-w-sm rounded cursor-pointer hover:opacity-90"
-                                onClick={() => window.open(msg.mediaUrl, '_blank')}
+                                onClick={() => window.open(mediaUrl, '_blank')}
                               />
                             )}
 
                             {/* Video */}
-                            {msg.mediaType === 'video' && (
+                            {mediaType === 'video' && (
                               <video
-                                src={msg.mediaUrl}
+                                src={mediaUrl}
                                 controls
                                 className="w-full max-w-sm rounded"
                               />
                             )}
 
                             {/* Audio */}
-                            {msg.mediaType === 'audio' && (
+                            {mediaType === 'audio' && (
                               <div className="flex items-center gap-3 px-4 py-3 bg-black/10 rounded">
-                                <audio src={msg.mediaUrl} controls className="flex-1" />
+                                <audio src={mediaUrl} controls className="flex-1" />
                               </div>
                             )}
 
                             {/* Document */}
-                            {msg.mediaType === 'document' && (
+                            {mediaType === 'document' && (
                               <a
-                                href={msg.mediaUrl}
+                                href={mediaUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className={`flex items-center gap-3 px-4 py-3 rounded hover:bg-black/5 transition-colors ${
@@ -564,7 +588,7 @@ export default function Chat() {
                         )}
 
                         {/* Timestamp and Status */}
-                        <div className={`flex items-center justify-end gap-1 px-4 pb-2 ${!msg.message && msg.mediaUrl ? 'pt-2' : ''}`}>
+                        <div className={`flex items-center justify-end gap-1 px-4 pb-2 ${!msg.message && mediaUrl ? 'pt-2' : ''}`}>
                           <p
                             className={`text-xs ${
                               msg.direction === 'outbound' ? 'text-green-100' : 'text-gray-500'
@@ -605,7 +629,8 @@ export default function Chat() {
                         </div>
                       </div>
                     </div>
-                  ))
+                    )
+                  })
                 )}
                 <div ref={messagesEndRef} />
               </div>

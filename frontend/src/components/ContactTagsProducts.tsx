@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { X, Tag as TagIcon, Package, Settings } from 'lucide-react'
@@ -36,9 +36,34 @@ export default function ContactTagsProducts({ contactId }: ContactTagsProductsPr
     }
   })
 
-  // Get contact tags (from contact_tags table)
-  // For now not used, would need specific endpoint
-  // const { data: contactTagsData } = ...
+  // Get contact's tags and products
+  const { data: contactData } = useQuery({
+    queryKey: ['contact-details', contactId],
+    queryFn: async () => {
+      const res = await fetch(`/api/contacts/${contactId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        }
+      })
+      if (!res.ok) throw new Error('Failed to fetch contact')
+      const data = await res.json()
+      return data.data
+    },
+    enabled: !!contactId
+  })
+
+  // Initialize selected tags and products from contact data
+  useEffect(() => {
+    if (contactData) {
+      // Extract tag IDs from contact_tags relationship
+      const tagIds = contactData.tags?.map((t: any) => t.tag_id) || []
+      setSelectedTags(tagIds)
+
+      // Extract product IDs from contact_products relationship
+      const productIds = contactData.products?.map((p: any) => p.product_id) || []
+      setSelectedProducts(productIds)
+    }
+  }, [contactData])
 
   // Add tag to contact
   const addTagMutation = useMutation({

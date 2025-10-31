@@ -83,6 +83,26 @@ export const contactsAPI = {
     api.post('/contacts/merge', { primaryContactId, contactIdsToMerge }),
 }
 
+export interface Cadence {
+  id: string
+  campaign_id: string
+  day_number: number
+  message: string
+  send_time: string
+  created_at?: string
+  updated_at?: string
+  media?: CadenceMedia[]
+}
+
+export interface CadenceMedia {
+  id?: string
+  cadence_id?: string
+  media_url: string
+  media_type: 'image' | 'video' | 'audio' | 'document'
+  caption?: string
+  display_order?: number
+}
+
 export const campaignsAPI = {
   getAll: () => api.get<{ success: boolean; data: Campaign[] }>('/campaigns'),
   getById: (id: string) => api.get<{ success: boolean; data: Campaign }>(`/campaigns/${id}`),
@@ -90,6 +110,16 @@ export const campaignsAPI = {
   pause: (id: string) => api.post(`/campaigns/${id}/pause`),
   resume: (id: string) => api.post(`/campaigns/${id}/resume`),
   cancel: (id: string) => api.post(`/campaigns/${id}/cancel`),
+
+  // Cadences
+  getCadences: (campaignId: string) =>
+    api.get<{ success: boolean; data: Cadence[] }>(`/campaigns/${campaignId}/cadences`),
+  createCadence: (campaignId: string, data: Partial<Cadence>) =>
+    api.post<{ success: boolean; data: Cadence }>(`/campaigns/${campaignId}/cadences`, data),
+  updateCadence: (campaignId: string, cadenceId: string, data: Partial<Cadence>) =>
+    api.put<{ success: boolean; data: Cadence }>(`/campaigns/${campaignId}/cadences/${cadenceId}`, data),
+  deleteCadence: (campaignId: string, cadenceId: string) =>
+    api.delete<{ success: boolean }>(`/campaigns/${campaignId}/cadences/${cadenceId}`),
 }
 
 export const messagesAPI = {

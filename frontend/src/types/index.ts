@@ -23,6 +23,8 @@ export interface Contact {
   email?: string
   tags: string[]
   products: string[]
+  tagDetails?: Array<{ id: string; name: string; color: string }>
+  productDetails?: Array<{ id: string; name: string; price?: number }>
   custom_fields: Record<string, any>
   opt_in_status: 'pending' | 'opted_in' | 'opted_out'
   opt_in_at?: string

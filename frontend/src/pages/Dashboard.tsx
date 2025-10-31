@@ -290,56 +290,120 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Recent Activity */}
-      <Card className="border-none bg-white/10 backdrop-blur-md">
-        <CardHeader>
-          <CardTitle className="text-white">Atividade Recente</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {activityLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <RefreshCw className="animate-spin text-white" size={32} />
-            </div>
-          ) : recentActivity && recentActivity.length > 0 ? (
-            <div className="space-y-3">
-              {recentActivity.map((activity: any) => (
-                <div key={activity.id} className="flex items-start gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
-                  <div className={`p-2 rounded ${getActivityColor(activity.type)}`}>
-                    {getActivityIcon(activity.type)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-white">{getActivityLabel(activity.type)}</span>
-                      <span className="text-xs text-clinic-gray-400">{formatDateTime(activity.timestamp || activity.created_at)}</span>
+      {/* Recent Activity & Financial Overview */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Activity - Smaller */}
+        <Card className="border-none bg-white/10 backdrop-blur-md lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="text-white">Atividade Recente</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {activityLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="animate-spin text-white" size={32} />
+              </div>
+            ) : recentActivity && recentActivity.length > 0 ? (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {recentActivity.slice(0, 5).map((activity: any) => (
+                  <div key={activity.id} className="flex items-start gap-2 p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+                    <div className={`p-1.5 rounded ${getActivityColor(activity.type)}`}>
+                      {getActivityIcon(activity.type)}
                     </div>
-                    {activity.type === 'message' && activity.data?.content && (
-                      <p className="text-sm text-clinic-gray-300 mt-1 truncate">{activity.data.content}</p>
-                    )}
-                    {activity.type === 'campaign' && activity.data?.name && (
-                      <p className="text-sm text-clinic-gray-300 mt-1">{activity.data.name}</p>
-                    )}
-                    {activity.type === 'appointment' && activity.data?.title && (
-                      <p className="text-sm text-clinic-gray-300 mt-1">{activity.data.title}</p>
-                    )}
-                    {activity.data?.contacts && (
-                      <p className="text-xs text-clinic-gray-400 mt-1">
-                        {activity.data.contacts.name} {activity.data.contacts.phone && `(${activity.data.contacts.phone})`}
-                      </p>
-                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-white">{getActivityLabel(activity.type)}</span>
+                        <span className="text-xs text-clinic-gray-400">{formatDateTime(activity.timestamp || activity.created_at)}</span>
+                      </div>
+                      {activity.type === 'message' && activity.data?.content && (
+                        <p className="text-xs text-clinic-gray-300 mt-0.5 truncate">{activity.data.content}</p>
+                      )}
+                      {activity.type === 'campaign' && activity.data?.name && (
+                        <p className="text-xs text-clinic-gray-300 mt-0.5">{activity.data.name}</p>
+                      )}
+                      {activity.type === 'appointment' && activity.data?.title && (
+                        <p className="text-xs text-clinic-gray-300 mt-0.5">{activity.data.title}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Package className="mx-auto mb-4 text-clinic-gray-400" size={32} />
+                <p className="text-sm text-clinic-gray-400">
+                  Nenhuma atividade recente
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Financial Overview */}
+        <Card className="border-none bg-white/10 backdrop-blur-md lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-white">Previsibilidade de Negócios</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="animate-spin text-white" size={32} />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Revenue Forecast */}
+                <div>
+                  <h3 className="text-lg font-semibold text-white mb-4">Previsão de Receita</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white/5 p-4 rounded-lg">
+                      <p className="text-sm text-clinic-gray-400 mb-1">Este Mês</p>
+                      <p className="text-2xl font-bold text-green-400">R$ {(dashboardStats?.financial?.currentMonth || 0).toLocaleString('pt-BR')}</p>
+                      <p className="text-xs text-clinic-gray-400 mt-1">{dashboardStats?.financial?.currentMonthDeals || 0} negócios</p>
+                    </div>
+                    <div className="bg-white/5 p-4 rounded-lg">
+                      <p className="text-sm text-clinic-gray-400 mb-1">Próximo Mês</p>
+                      <p className="text-2xl font-bold text-blue-400">R$ {(dashboardStats?.financial?.nextMonth || 0).toLocaleString('pt-BR')}</p>
+                      <p className="text-xs text-clinic-gray-400 mt-1">{dashboardStats?.financial?.nextMonthDeals || 0} negócios</p>
+                    </div>
+                    <div className="bg-white/5 p-4 rounded-lg">
+                      <p className="text-sm text-clinic-gray-400 mb-1">Próximos 3 Meses</p>
+                      <p className="text-2xl font-bold text-purple-400">R$ {(dashboardStats?.financial?.threeMonths || 0).toLocaleString('pt-BR')}</p>
+                      <p className="text-xs text-clinic-gray-400 mt-1">{dashboardStats?.financial?.threeMonthsDeals || 0} negócios</p>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <Package className="mx-auto mb-4 text-clinic-gray-400" size={48} />
-              <p className="text-sm text-clinic-gray-400">
-                Nenhuma atividade recente
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+
+                {/* Deal Pipeline */}
+                <div>
+                  <h3 className="text-lg font-semibold text-white mb-4">Pipeline de Negócios</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <span className="text-sm text-clinic-gray-300">Leads Qualificados</span>
+                      </div>
+                      <span className="text-white font-semibold">{dashboardStats?.pipeline?.qualified || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                        <span className="text-sm text-clinic-gray-300">Em Negociação</span>
+                      </div>
+                      <span className="text-white font-semibold">{dashboardStats?.pipeline?.negotiating || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span className="text-sm text-clinic-gray-300">Fechados</span>
+                      </div>
+                      <span className="text-white font-semibold">{dashboardStats?.pipeline?.closed || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

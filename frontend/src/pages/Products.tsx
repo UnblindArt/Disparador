@@ -40,6 +40,8 @@ export default function Products() {
     sku: '',
     category: '',
     color: PRESET_COLORS[0],
+    maxInstallments: 12,
+    installmentInterestRate: 0,
   })
   const queryClient = useQueryClient()
 
@@ -101,6 +103,8 @@ export default function Products() {
       sku: '',
       category: '',
       color: PRESET_COLORS[0],
+      maxInstallments: 12,
+      installmentInterestRate: 0,
     })
     setEditingProduct(null)
     setShowForm(false)
@@ -134,6 +138,8 @@ export default function Products() {
       sku: product.sku || '',
       category: product.category || '',
       color: '#10B981', // default color
+      maxInstallments: (product as any).max_installments || 12,
+      installmentInterestRate: (product as any).installment_interest_rate || 0,
     })
     setShowForm(true)
   }
@@ -256,6 +262,63 @@ export default function Products() {
                     />
                   ))}
                 </div>
+              </div>
+
+              {/* Installment Options */}
+              <div className="bg-white/5 p-4 rounded-lg space-y-4">
+                <h4 className="text-sm font-semibold text-white">Opções de Parcelamento</h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="Máximo de Parcelas"
+                    type="number"
+                    min="1"
+                    max="24"
+                    value={formData.maxInstallments}
+                    onChange={(e) => setFormData({ ...formData, maxInstallments: parseInt(e.target.value) || 1 })}
+                    placeholder="12"
+                    className="bg-white/20 text-white placeholder:text-clinic-gray-400"
+                  />
+
+                  <Input
+                    label="Taxa de Juros (% a.m.)"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={formData.installmentInterestRate}
+                    onChange={(e) => setFormData({ ...formData, installmentInterestRate: parseFloat(e.target.value) || 0 })}
+                    placeholder="0.00"
+                    className="bg-white/20 text-white placeholder:text-clinic-gray-400"
+                  />
+                </div>
+
+                {/* Installment Simulator */}
+                {formData.price && parseFloat(formData.price) > 0 && (
+                  <div className="mt-3 p-3 bg-white/10 rounded-lg">
+                    <p className="text-xs text-clinic-gray-400 mb-2">Simulação de Parcelas:</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {[1, 3, 6, formData.maxInstallments].filter((x, i, arr) => arr.indexOf(x) === i && x <= formData.maxInstallments).map(installments => {
+                        const price = parseFloat(formData.price)
+                        const rate = formData.installmentInterestRate / 100
+                        const installmentValue = installments === 1
+                          ? price
+                          : rate === 0
+                            ? price / installments
+                            : (price * rate * Math.pow(1 + rate, installments)) / (Math.pow(1 + rate, installments) - 1)
+
+                        return (
+                          <div key={installments} className="text-center">
+                            <p className="text-xs text-clinic-gray-400">{installments}x</p>
+                            <p className="text-sm font-semibold text-green-400">
+                              R$ {installmentValue.toFixed(2)}
+                            </p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>

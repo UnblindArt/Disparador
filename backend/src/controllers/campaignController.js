@@ -73,6 +73,49 @@ export const deleteCampaign = asyncHandler(async (req, res) => {
   });
 });
 
+// ==================== CADENCE CONTROLLERS ====================
+
+export const createCampaignCadence = asyncHandler(async (req, res) => {
+  const cadence = await campaignService.createCadence(req.user.id, req.params.campaignId, req.body);
+
+  res.status(201).json({
+    success: true,
+    data: cadence,
+  });
+});
+
+export const getCampaignCadences = asyncHandler(async (req, res) => {
+  const cadences = await campaignService.getCadences(req.user.id, req.params.campaignId);
+
+  res.json({
+    success: true,
+    data: cadences,
+  });
+});
+
+export const updateCampaignCadence = asyncHandler(async (req, res) => {
+  const cadence = await campaignService.updateCadence(
+    req.user.id,
+    req.params.campaignId,
+    req.params.cadenceId,
+    req.body
+  );
+
+  res.json({
+    success: true,
+    data: cadence,
+  });
+});
+
+export const deleteCampaignCadence = asyncHandler(async (req, res) => {
+  await campaignService.deleteCadence(req.user.id, req.params.campaignId, req.params.cadenceId);
+
+  res.json({
+    success: true,
+    message: 'Cadence deleted successfully',
+  });
+});
+
 export default {
   createCampaign,
   getCampaigns,
@@ -82,4 +125,8 @@ export default {
   resumeCampaign,
   cancelCampaign,
   deleteCampaign,
+  createCampaignCadence,
+  getCampaignCadences,
+  updateCampaignCadence,
+  deleteCampaignCadence,
 };

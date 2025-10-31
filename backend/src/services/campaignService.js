@@ -380,6 +380,170 @@ export async function deleteCampaign(userId, campaignId) {
   }
 }
 
+// ==================== CADENCE FUNCTIONS ====================
+
+export async function createCadence(userId, campaignId, cadenceData) {
+  try {
+    const { day_number, message, send_time, media } = cadenceData;
+
+    // Verify campaign ownership
+    const { data: campaign } = await supabaseAdmin
+      .from('campaigns')
+      .select('id')
+      .eq('id', campaignId)
+      .eq('user_id', userId)
+      .single();
+
+    if (!campaign) {
+      throw new Error('Campaign not found or access denied');
+    }
+
+    // Create cadence
+    const { data: cadence, error } = await supabaseAdmin
+      .from('campaign_cadences')
+      .insert([{ campaign_id: campaignId, day_number, message, send_time }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Add media if provided
+    if (media && media.length > 0) {
+      const mediaRecords = media.map((m, index) => ({
+        cadence_id: cadence.id,
+        media_url: m.media_url,
+        media_type: m.media_type,
+        caption: m.caption || null,
+        display_order: index
+      }));
+
+      await supabaseAdmin
+        .from('campaign_cadence_media')
+        .insert(mediaRecords);
+    }
+
+    // Mark campaign as having cadence
+    await supabaseAdmin
+      .from('campaigns')
+      .update({ has_cadence: true })
+      .eq('id', campaignId);
+
+    logger.info('Cadence created:', { userId, campaignId, cadenceId: cadence.id });
+    return cadence;
+  } catch (error) {
+    logger.error('Create cadence error:', error);
+    throw error;
+  }
+}
+
+export async function getCadences(userId, campaignId) {
+  try {
+    // Verify campaign ownership
+    const { data: campaign } = await supabaseAdmin
+      .from('campaigns')
+      .select('id')
+      .eq('id', campaignId)
+      .eq('user_id', userId)
+      .single();
+
+    if (!campaign) {
+      throw new Error('Campaign not found or access denied');
+    }
+
+    // Get cadences with media
+    const { data: cadences, error } = await supabaseAdmin
+      .from('campaign_cadences')
+      .select(`
+        *,
+        media:campaign_cadence_media(*)
+      `)
+      .eq('campaign_id', campaignId)
+      .order('day_number', { ascending: true });
+
+    if (error) throw error;
+
+    return cadences;
+  } catch (error) {
+    logger.error('Get cadences error:', error);
+    throw error;
+  }
+}
+
+export async function updateCadence(userId, campaignId, cadenceId, updates) {
+  try {
+    // Verify campaign ownership
+    const { data: campaign } = await supabaseAdmin
+      .from('campaigns')
+      .select('id')
+      .eq('id', campaignId)
+      .eq('user_id', userId)
+      .single();
+
+    if (!campaign) {
+      throw new Error('Campaign not found or access denied');
+    }
+
+    const { data: cadence, error } = await supabaseAdmin
+      .from('campaign_cadences')
+      .update(updates)
+      .eq('id', cadenceId)
+      .eq('campaign_id', campaignId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    logger.info('Cadence updated:', { userId, campaignId, cadenceId });
+    return cadence;
+  } catch (error) {
+    logger.error('Update cadence error:', error);
+    throw error;
+  }
+}
+
+export async function deleteCadence(userId, campaignId, cadenceId) {
+  try {
+    // Verify campaign ownership
+    const { data: campaign } = await supabaseAdmin
+      .from('campaigns')
+      .select('id')
+      .eq('id', campaignId)
+      .eq('user_id', userId)
+      .single();
+
+    if (!campaign) {
+      throw new Error('Campaign not found or access denied');
+    }
+
+    const { error } = await supabaseAdmin
+      .from('campaign_cadences')
+      .delete()
+      .eq('id', cadenceId)
+      .eq('campaign_id', campaignId);
+
+    if (error) throw error;
+
+    // Check if campaign still has cadences
+    const { data: remainingCadences } = await supabaseAdmin
+      .from('campaign_cadences')
+      .select('id')
+      .eq('campaign_id', campaignId);
+
+    if (!remainingCadences || remainingCadences.length === 0) {
+      await supabaseAdmin
+        .from('campaigns')
+        .update({ has_cadence: false })
+        .eq('id', campaignId);
+    }
+
+    logger.info('Cadence deleted:', { userId, campaignId, cadenceId });
+    return true;
+  } catch (error) {
+    logger.error('Delete cadence error:', error);
+    throw error;
+  }
+}
+
 export default {
   createCampaign,
   getCampaigns,
@@ -389,4 +553,8 @@ export default {
   resumeCampaign,
   cancelCampaign,
   deleteCampaign,
+  createCadence,
+  getCadences,
+  updateCadence,
+  deleteCadence,
 };

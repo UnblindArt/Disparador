@@ -22,6 +22,7 @@ export default function Contacts() {
   const [newContact, setNewContact] = useState({ name: '', phone: '', email: '' })
   const [selectedContactForTags, setSelectedContactForTags] = useState<Contact | null>(null)
   const [selectedContactForProducts, setSelectedContactForProducts] = useState<Contact | null>(null)
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string>('')
   const queryClient = useQueryClient()
 
   // Get all instances for sync
@@ -56,6 +57,21 @@ export default function Contacts() {
       const res = await contactsAPI.getAll()
       return res.data.data
     },
+  })
+
+  // Get all tags for filtering
+  const { data: tagsData } = useQuery({
+    queryKey: ['tags'],
+    queryFn: async () => {
+      const res = await fetch('/api/tags', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        }
+      })
+      if (!res.ok) throw new Error('Failed to fetch tags')
+      const data = await res.json()
+      return data.data
+    }
   })
 
   const createMutation = useMutation({
@@ -133,11 +149,17 @@ export default function Contacts() {
     },
   })
 
-  const filtered = contacts?.filter((c: Contact) =>
-    c.name?.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone.includes(search) ||
-    c.email?.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = contacts?.filter((c: Contact) => {
+    const matchesSearch = c.name?.toLowerCase().includes(search.toLowerCase()) ||
+      c.phone.includes(search) ||
+      c.email?.toLowerCase().includes(search.toLowerCase())
+
+    const matchesTag = !selectedTagFilter ||
+      (c.tags && c.tags.includes(selectedTagFilter)) ||
+      (c.tagDetails && c.tagDetails.some((tag: any) => tag.id === selectedTagFilter))
+
+    return matchesSearch && matchesTag
+  })
 
   return (
     <div className="space-y-6">
@@ -296,6 +318,20 @@ export default function Contacts() {
                 className="bg-white/20 text-white placeholder:text-clinic-gray-400"
               />
             </div>
+            <div className="w-48">
+              <select
+                value={selectedTagFilter}
+                onChange={(e) => setSelectedTagFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-white/20 text-white border border-white/30 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="" className="bg-gray-800">Todas as tags</option>
+                {tagsData?.map((tag: any) => (
+                  <option key={tag.id} value={tag.id} className="bg-gray-800">
+                    {tag.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <Search className="text-clinic-gray-400" size={20} />
           </div>
         </CardHeader>
@@ -304,13 +340,44 @@ export default function Contacts() {
             {filtered?.map((contact: Contact) => (
               <div
                 key={contact.id}
-                className="flex items-center justify-between p-4 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                className="flex items-center gap-3 p-4 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
               >
-                <div className="flex-1">
+                {/* Profile Picture */}
+                <div className="w-12 h-12 rounded-full bg-clinic-royal/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {contact.custom_fields?.whatsapp_profile_pic ? (
+                    <img
+                      src={contact.custom_fields.whatsapp_profile_pic}
+                      alt={contact.name || 'Perfil'}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback to initials if image fails to load
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <span className="text-lg font-semibold text-clinic-royal">
+                      {(contact.name || 'S')[0].toUpperCase()}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
                   <p className="font-medium text-white">{contact.name || 'Sem nome'}</p>
                   <p className="text-sm text-clinic-gray-400">
                     {formatPhone(contact.phone)} {contact.email && `• ${contact.email}`}
                   </p>
+                  {contact.tagDetails && contact.tagDetails.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {contact.tagDetails.map((tag: any) => (
+                        <span
+                          key={tag.id}
+                          className="text-xs px-2 py-0.5 rounded-full bg-clinic-royal/20 text-clinic-royal"
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span
