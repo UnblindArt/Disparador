@@ -50,7 +50,10 @@ const upload = multer({
       'audio/mpeg',
       'audio/wav',
       'audio/ogg',
+      'audio/webm',
       'audio/aac',
+      'audio/mp3',
+      'audio/x-m4a',
       // Documents
       'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -70,6 +73,7 @@ const upload = multer({
 router.use(authenticate);
 
 // Upload routes
+router.post('/', upload.single('file'), uploadController.uploadMedia); // Generic upload endpoint
 router.post('/contact-list', upload.single('file'), uploadController.uploadContactList);
 router.post('/media', upload.single('file'), uploadController.uploadMedia);
 router.get('/files', uploadController.getUploadedFiles);

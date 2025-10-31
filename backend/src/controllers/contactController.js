@@ -253,24 +253,46 @@ export const getWhatsAppChats = asyncHandler(async (req, res) => {
     });
   }
 
-  // Os chats já vêm normalizados, ordenados e sem duplicatas do evolutionService
+  // Get unread counts from database for each chat
+  const phoneNumbers = evolutionResult.chats.map(chat =>
+    chat.remoteJid?.replace(/@.*$/, '') || ''
+  ).filter(phone => phone);
+
+  const { data: unreadCounts } = await supabaseAdmin
+    .from('messages')
+    .select('phone')
+    .eq('user_id', userId)
+    .eq('direction', 'inbound')
+    .is('read_at', null);
+
+  // Count unread messages per phone
+  const unreadMap = {};
+  if (unreadCounts) {
+    unreadCounts.forEach(msg => {
+      unreadMap[msg.phone] = (unreadMap[msg.phone] || 0) + 1;
+    });
+  }
+
+  // Map chats with database unread counts (include groups too)
   const chats = evolutionResult.chats
-    .filter(chat => !chat.isGroup) // Filter out groups for now
-    .map(chat => ({
-      id: chat.id,
-      remoteJid: chat.remoteJid,
-      name: chat.name, // Nome já normalizado pelo service
-      phone: chat.remoteJid?.replace(/@.*$/, '') || '',
-      profilePicUrl: chat.profilePicUrl,
-      unreadCount: chat.unreadCount || 0,
-      lastMessageTime: chat.conversationTimestamp,
-      lastMessage: chat.lastMessage ? {
-        text: chat.lastMessage.text || '',
-        timestamp: chat.lastMessage.timestamp,
-        fromMe: chat.lastMessage.fromMe
-      } : null,
-      isGroup: chat.isGroup
-    }));
+    .map(chat => {
+      const phone = chat.remoteJid?.replace(/@.*$/, '') || '';
+      return {
+        id: chat.id,
+        remoteJid: chat.remoteJid,
+        name: chat.name,
+        phone,
+        profilePicUrl: chat.profilePicUrl,
+        unreadCount: unreadMap[phone] || 0, // Use database count
+        lastMessageTime: chat.conversationTimestamp,
+        lastMessage: chat.lastMessage ? {
+          text: chat.lastMessage.text || '',
+          timestamp: chat.lastMessage.timestamp,
+          fromMe: chat.lastMessage.fromMe
+        } : null,
+        isGroup: chat.isGroup
+      };
+    });
 
   logger.info(`✅ ${chats.length} conversas encontradas`);
 

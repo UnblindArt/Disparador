@@ -66,20 +66,25 @@ export default function AudioRecorder({ onSend, onCancel }: AudioRecorderProps) 
     }
   }
 
-  const stopRecording = () => {
+  const stopRecordingAndSend = () => {
     if (mediaRecorderRef.current && isRecording) {
+      // Armazena a duração atual antes de parar
+      const currentDuration = duration
+
       mediaRecorderRef.current.stop()
       setIsRecording(false)
       if (timerRef.current) {
         clearInterval(timerRef.current)
       }
-    }
-  }
 
-  const handleSend = () => {
-    if (audioBlob) {
-      onSend(audioBlob, duration)
-      cleanup()
+      // Aguarda o blob ser criado e envia automaticamente
+      setTimeout(() => {
+        if (chunksRef.current.length > 0) {
+          const blob = new Blob(chunksRef.current, { type: 'audio/webm;codecs=opus' })
+          onSend(blob, currentDuration)
+          cleanup()
+        }
+      }, 100)
     }
   }
 
@@ -89,8 +94,12 @@ export default function AudioRecorder({ onSend, onCancel }: AudioRecorderProps) 
   }
 
   const cleanup = () => {
-    if (isRecording) {
-      stopRecording()
+    if (isRecording && mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+      }
     }
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl)
@@ -137,34 +146,19 @@ export default function AudioRecorder({ onSend, onCancel }: AudioRecorderProps) 
               </span>
             </div>
             <button
-              onClick={stopRecording}
-              className="p-3 bg-gray-500 text-white rounded-full hover:bg-gray-600 transition-colors"
-              title="Parar gravação"
-            >
-              <Square className="w-5 h-5" />
-            </button>
-          </>
-        )}
-
-        {!isRecording && audioBlob && (
-          <>
-            <div className="flex items-center gap-3 flex-1">
-              <audio src={audioUrl!} controls className="flex-1" />
-              <span className="text-sm text-gray-500">{formatDuration(duration)}</span>
-            </div>
-            <button
-              onClick={cleanup}
-              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-              title="Excluir"
+              onClick={handleCancel}
+              className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors mr-2"
+              title="Cancelar"
             >
               <Trash2 className="w-5 h-5" />
             </button>
             <button
-              onClick={handleSend}
-              className="p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-              title="Enviar áudio"
+              onClick={stopRecordingAndSend}
+              className="p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+              title="Parar e enviar áudio"
             >
-              <Send className="w-5 h-5" />
+              <Square className="w-4 h-4" />
+              <Send className="w-4 h-4" />
             </button>
           </>
         )}

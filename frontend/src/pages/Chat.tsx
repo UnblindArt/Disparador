@@ -10,9 +10,29 @@ import ContactProfile from '../components/ContactProfile'
 
 // Helper to extract media from message (supports both direct fields and metadata)
 function getMediaFromMessage(msg: ChatMessage) {
-  const mediaUrl = msg.mediaUrl || msg.metadata?.media_url
+  let mediaUrl = msg.mediaUrl || msg.metadata?.media_url
   const mediaType = msg.mediaType || msg.metadata?.media_type
+
+  // Ensure absolute URL for media
+  if (mediaUrl && !mediaUrl.startsWith('http')) {
+    mediaUrl = `${window.location.origin}${mediaUrl.startsWith('/') ? '' : '/'}${mediaUrl}`
+  }
+
   return { mediaUrl, mediaType }
+}
+
+// Helper to get avatar URL with fallback
+function getAvatarUrl(url?: string) {
+  if (!url) return null
+
+  // If it's a data URL (base64), return as is
+  if (url.startsWith('data:')) return url
+
+  // If already absolute URL, return as is
+  if (url.startsWith('http')) return url
+
+  // If relative URL, make it absolute
+  return `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`
 }
 
 export default function Chat() {
@@ -58,10 +78,29 @@ export default function Chat() {
     refetchInterval: autoRefresh ? 10000 : false, // Auto-refresh every 10s
   })
 
+  // Remove duplicate chats by phone number (keep most recent)
+  const uniqueChats = useMemo(() => {
+    if (!chatsData) return []
+
+    const chatMap = new Map()
+    for (const chat of chatsData) {
+      const existingChat = chatMap.get(chat.phone)
+      if (!existingChat || (chat.lastMessageTime && chat.lastMessageTime > (existingChat.lastMessageTime || 0))) {
+        chatMap.set(chat.phone, chat)
+      }
+    }
+
+    return Array.from(chatMap.values()).sort((a, b) => {
+      const timeA = a.lastMessageTime || 0
+      const timeB = b.lastMessageTime || 0
+      return timeB - timeA
+    })
+  }, [chatsData])
+
   // Handle notifications for unread messages
   useEffect(() => {
-    if (chatsData && chatsData.length > 0) {
-      const unreadCount = chatsData.reduce((acc: number, chat: WhatsAppChat) => acc + (chat.unreadCount || 0), 0)
+    if (uniqueChats && uniqueChats.length > 0) {
+      const unreadCount = uniqueChats.reduce((acc: number, chat: WhatsAppChat) => acc + (chat.unreadCount || 0), 0)
       if (unreadCount > 0 && !document.hasFocus()) {
         // Browser notification (if permitted)
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -72,7 +111,7 @@ export default function Chat() {
         }
       }
     }
-  }, [chatsData])
+  }, [uniqueChats])
 
   // Get conversation messages
   const { data: messagesData, isLoading: messagesLoading } = useQuery({
@@ -85,6 +124,18 @@ export default function Chat() {
     enabled: !!selectedInstance && !!selectedChat,
     refetchInterval: autoRefresh ? 5000 : false, // Auto-refresh every 5s
   })
+
+  // Mark messages as read and update chat list when opening a conversation
+  useEffect(() => {
+    if (selectedChat && selectedInstance) {
+      // Refetch chats to update unread count (backend marks as read when fetching conversation)
+      const timer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['whatsapp-chats', selectedInstance] })
+      }, 1000)
+
+      return () => clearTimeout(timer)
+    }
+  }, [selectedChat, selectedInstance, queryClient])
 
   // Remove duplicate messages - sometimes refetch causes duplicates
   const uniqueMessages = useMemo(() => {
@@ -115,7 +166,18 @@ export default function Chat() {
       toast.success('Mensagem enviada!')
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Erro ao enviar mensagem')
+      const errorMessage = error.response?.data?.message || error.message || 'Erro ao enviar mensagem'
+
+      // Check for specific connection errors
+      if (errorMessage.includes('Connection Closed') || errorMessage.includes('não conectada')) {
+        toast.error('⚠️ Instância desconectada! Reconecte o WhatsApp e tente novamente.')
+      } else if (error.response?.status === 400) {
+        toast.error(`Erro ao enviar: ${errorMessage}`)
+      } else if (error.response?.status === 500) {
+        toast.error('Erro no servidor. Tente novamente em alguns segundos.')
+      } else {
+        toast.error(errorMessage)
+      }
     },
   })
 
@@ -171,10 +233,10 @@ export default function Chat() {
       const formData = new FormData()
       formData.append('file', audioBlob, `audio-${Date.now()}.webm`)
 
-      const uploadResponse = await fetch('https://dev-disparador.unblind.cloud/api/uploads', {
+      const uploadResponse = await fetch('/api/uploads', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
         },
         body: formData
       })
@@ -209,10 +271,10 @@ export default function Chat() {
       const formData = new FormData()
       formData.append('file', file)
 
-      const uploadResponse = await fetch('https://dev-disparador.unblind.cloud/api/uploads', {
+      const uploadResponse = await fetch('/api/uploads', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
         },
         body: formData
       })
@@ -351,8 +413,8 @@ export default function Chat() {
         <div className="w-80 bg-white border-r flex flex-col">
           <div className="p-4 border-b bg-gray-50">
             <h2 className="font-semibold text-gray-900">Conversas</h2>
-            {chatsData && (
-              <p className="text-xs text-gray-500 mt-1">{chatsData.length} conversas</p>
+            {uniqueChats && (
+              <p className="text-xs text-gray-500 mt-1">{uniqueChats.length} conversas</p>
             )}
           </div>
 
@@ -367,14 +429,14 @@ export default function Chat() {
                 <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>Selecione uma instância</p>
               </div>
-            ) : chatsData && chatsData.length === 0 ? (
+            ) : uniqueChats && uniqueChats.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>Nenhuma conversa encontrada</p>
               </div>
             ) : (
               <div className="divide-y">
-                {chatsData?.map((chat) => (
+                {uniqueChats?.map((chat) => (
                   <button
                     key={chat.id}
                     onClick={() => setSelectedChat(chat)}
@@ -384,8 +446,17 @@ export default function Chat() {
                   >
                     {/* Avatar */}
                     <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      {chat.profilePicUrl ? (
-                        <img src={chat.profilePicUrl} alt={chat.name} className="w-full h-full object-cover" />
+                      {getAvatarUrl(chat.profilePicUrl) ? (
+                        <img
+                          src={getAvatarUrl(chat.profilePicUrl)!}
+                          alt={chat.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // Fallback to icon if image fails to load
+                            e.currentTarget.style.display = 'none'
+                            e.currentTarget.parentElement!.innerHTML = '<div class="w-6 h-6 text-gray-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg></div>'
+                          }}
+                        />
                       ) : (
                         <Phone className="w-6 h-6 text-gray-400" />
                       )}
@@ -466,8 +537,19 @@ export default function Chat() {
                   <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-                  {selectedChat.profilePicUrl ? (
-                    <img src={selectedChat.profilePicUrl} alt={selectedChat.name} className="w-full h-full object-cover" />
+                  {getAvatarUrl(selectedChat.profilePicUrl) ? (
+                    <img
+                      src={getAvatarUrl(selectedChat.profilePicUrl)!}
+                      alt={selectedChat.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none'
+                        const parent = e.currentTarget.parentElement
+                        if (parent) {
+                          parent.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>'
+                        }
+                      }}
+                    />
                   ) : (
                     <Phone className="w-5 h-5 text-gray-400" />
                   )}
@@ -531,12 +613,20 @@ export default function Chat() {
                         {mediaUrl && (
                           <div className="mb-2">
                             {/* Image */}
-                            {mediaType === 'image' && (
+                            {(mediaType === 'image' || mediaType === 'sticker') && (
                               <img
                                 src={mediaUrl}
-                                alt="Imagem"
-                                className="w-full max-w-sm rounded cursor-pointer hover:opacity-90"
+                                alt={mediaType === 'sticker' ? 'Figurinha' : 'Imagem'}
+                                className={`rounded cursor-pointer hover:opacity-90 ${
+                                  mediaType === 'sticker' ? 'max-w-[200px]' : 'w-full max-w-sm'
+                                }`}
                                 onClick={() => window.open(mediaUrl, '_blank')}
+                                onError={(e) => {
+                                  // Fallback for broken images
+                                  e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5Y2EzYWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5JbWFnZW0gaW5kaXNwb27DrXZlbDwvdGV4dD48L3N2Zz4='
+                                  e.currentTarget.style.maxWidth = '200px'
+                                  e.currentTarget.style.maxHeight = '200px'
+                                }}
                               />
                             )}
 
@@ -552,7 +642,22 @@ export default function Chat() {
                             {/* Audio */}
                             {mediaType === 'audio' && (
                               <div className="flex items-center gap-3 px-4 py-3 bg-black/10 rounded">
-                                <audio src={mediaUrl} controls className="flex-1" />
+                                <audio
+                                  src={mediaUrl}
+                                  controls
+                                  controlsList="nodownload"
+                                  className="flex-1 max-w-sm"
+                                  style={{ minWidth: '250px' }}
+                                  onError={(e) => {
+                                    console.error('Erro ao carregar áudio:', mediaUrl)
+                                    const parent = e.currentTarget.parentElement
+                                    if (parent) {
+                                      parent.innerHTML = '<div class="text-sm text-red-500">❌ Áudio indisponível</div>'
+                                    }
+                                  }}
+                                >
+                                  Seu navegador não suporta o elemento de áudio.
+                                </audio>
                               </div>
                             )}
 
@@ -668,6 +773,12 @@ export default function Chat() {
                       type="text"
                       value={newMessage}
                       onChange={handleMessageChange}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          handleSendMessage(e)
+                        }
+                      }}
                       placeholder="Digite uma mensagem..."
                       className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       disabled={sendMessageMutation.isPending}

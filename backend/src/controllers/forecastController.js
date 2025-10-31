@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../config/supabase.js';
+import { supabaseAdmin } from '../config/database.js';
 
 /**
  * Financial Forecast Controller

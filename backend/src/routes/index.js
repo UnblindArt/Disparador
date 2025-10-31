@@ -40,6 +40,7 @@ router.use('/messages', messageRoutes);
 router.use('/whatsapp', whatsappRoutes);
 router.use('/products', productRoutes);
 router.use('/upload', uploadRoutes);
+router.use('/uploads', uploadRoutes); // Alias for compatibility
 router.use('/chat', chatRoutes);
 router.use('/tags', tagRoutes);
 router.use('/appointments', appointmentRoutes);

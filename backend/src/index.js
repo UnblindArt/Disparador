@@ -4,12 +4,17 @@ import cors from 'cors';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import config from './config/env.js';
 import logger, { morganStream } from './config/logger.js';
 import { testDatabaseConnection } from './config/database.js';
 import { testRedisConnection } from './config/redis.js';
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -35,6 +40,10 @@ app.use(morgan('combined', { stream: morganStream }));
 
 // Trust proxy (for correct IP behind reverse proxy)
 app.set('trust proxy', 1);
+
+// Serve static files from uploads directory
+const uploadsPath = path.join(process.cwd(), 'uploads');
+app.use('/uploads', express.static(uploadsPath));
 
 // API routes
 app.use('/api', routes);
